@@ -1,0 +1,40 @@
+# @package _global_
+defaults:
+  - _self_
+  - env: robomimic_can
+  - planning: cem
+
+# Model configuration
+model_path: /mnt/data1/minghao/robomimic/checkpoints/outputs/robomimic_can_align/outputs/2025-08-13/16-32-15
+
+# Planning parameters  
+goal_H: 3
+num_episodes: 50
+num_envs: 1
+max_episode_length: 400
+seed: 42
+
+# Environment parameters
+frameskip: 5
+normalize_action: true
+img_size: 224
+
+# CEM planning parameters
+planning:
+  _target_: planning.cem.CEM
+  horizon: ${goal_H}
+  num_iterations: 5
+  num_samples: 400
+  num_elites: 40
+  alpha: 0.1
+  device: cuda
+  action_dim: 10
+  action_bounds: [-1.0, 1.0]
+
+env:
+  _target_: env.robomimic.robomimic_wrapper.RobomimicCanEnv
+  env_name: "PickPlaceCan" 
+  camera_names: ["agentview"]
+  camera_height: 224
+  camera_width: 224
+  render: false

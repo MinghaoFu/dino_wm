@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - env: point_maze
+  - env: robomimic_can
   - encoder: dino 
   - action_encoder: proprio
   - proprio_encoder: proprio
@@ -9,7 +9,7 @@ defaults:
   - override hydra/launcher: submitit_slurm
 
 # base path to save model outputs. Checkpoints will be saved to ${ckpt_base_path}/outputs.
-ckpt_base_path: /mnt/data1/minghao/bmw48/osfstorage/checkpoints/outputs/pusht_ours # put absolute path here
+ckpt_base_path: /mnt/data1/minghao/robomimic/checkpoints/outputs/robomimic_can # put absolute path here
 
 hydra:
   run:
@@ -20,10 +20,10 @@ hydra:
   launcher:
     submitit_folder: ${hydra.sweep.dir}/.submitit/%j
     nodes: 1
-    tasks_per_node: 1
+    tasks_per_node: 4  # 使用4个GPU
     cpus_per_task: 8
     mem_gb: 512
-    gres: "gpu:h100:1"
+    gres: "gpu:a100:4"  # 使用4个A100 GPU
     timeout_min: 2880
     setup: ["export DEBUGVAR=$(scontrol show hostnames $SLURM_JOB_NODELIST)",
             export MASTER_ADDR="$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)",
@@ -32,7 +32,7 @@ hydra:
 training:
   seed: 0
   epochs: 100
-  batch_size: 32 # should >= nodes * tasks_per_node
+  batch_size: 128 # should >= nodes * tasks_per_node (4 * 32 = 128)
   save_every_x_epoch: 1
   reconstruct_every_x_batch: 500
   num_reconstruct_samples: 6
@@ -47,12 +47,12 @@ concat_dim: 1
 
 normalize_action: True
 
-# action encoder
-action_emb_dim: 10
+# action encoder - 适配 robomimic 的 7D 动作空间
+action_emb_dim: 16  # 增加维度以处理更复杂的动作空间
 num_action_repeat: 1
 
-# proprio encoder
-proprio_emb_dim: 10 
+# proprio encoder - 适配 robomimic 的 23D 状态空间
+proprio_emb_dim: 32  # 增加维度以处理更复杂的状态空间
 num_proprio_repeat: 1
 
 num_hist: 3
@@ -78,4 +78,4 @@ plan_settings:
   planner: ['gd', 'cem']
   goal_source: ['dset', 'random_state']
   goal_H: [5]
-  alpha: [0.1, 1]
+  alpha: [0.1, 1] 

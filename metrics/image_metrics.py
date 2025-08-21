@@ -69,6 +69,44 @@ def psnr(img1, img2): # batched input only
     mse = (((img1 - img2)) ** 2).reshape(img1.shape[0], -1).mean()
     return 20 * torch.log10(1.0 / torch.sqrt(mse))
 
+def infonce_loss(z, z_hat, temperature=0.1, projection=None):
+    """
+    InfoNCE loss for contrastive learning
+    
+    Args:
+        z: (B, D1) - positive samples 
+        z_hat: (B, D2) - paired positive samples
+        temperature: temperature parameter (tau)
+        projection: trained nn.Linear layer to project z to match z_hat dimension
+    
+    Returns:
+        InfoNCE loss value
+    """
+    # Handle dimension mismatch with trained projection layer
+    if z.shape[-1] != z_hat.shape[-1]:
+        if projection is None:
+            raise ValueError(f"Dimension mismatch: z has {z.shape[-1]} dims, z_hat has {z_hat.shape[-1]} dims. "
+                           "Please provide a trained projection layer.")
+        z = projection(z)
+    
+    # Normalize embeddings for cosine similarity
+    z = F.normalize(z, dim=-1)
+    z_hat = F.normalize(z_hat, dim=-1)
+    
+    # Compute cosine similarity matrix
+    sim_matrix = torch.matmul(z, z_hat.T) / temperature  # (B, B)
+    
+    # Get positive pairs (diagonal elements)
+    pos_sim = torch.diag(sim_matrix)  # (B,)
+    
+    # InfoNCE loss: -log(exp(pos_sim) / sum(exp(all_sim)))
+    # Using log-sum-exp trick for numerical stability
+    exp_sim = torch.exp(sim_matrix)
+    sum_exp = torch.sum(exp_sim, dim=1)  # (B,)
+    
+    loss = -torch.mean(pos_sim - torch.log(sum_exp))
+    return loss
+
 def eval_images(img1, img2, item_only=True):
     metrics = {}
     metrics['l1'] = l1_loss(img1, img2)

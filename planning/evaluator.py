@@ -240,8 +240,9 @@ class PlanEvaluator:  # evaluator for planning
 
         # pad i_visuals or subsample e_visuals
         if not self.plot_full:
-            e_visuals = e_visuals[:, :: self.frameskip]
-            i_visuals = i_visuals[:, :: self.frameskip]
+            # Ensure both have the same length after subsampling
+            n_frames = i_visuals.shape[1]  # Use world model length as reference
+            e_visuals = e_visuals[:, :n_frames*self.frameskip:self.frameskip]  # Subsample to match
 
         n_columns = e_visuals.shape[1]
         assert (

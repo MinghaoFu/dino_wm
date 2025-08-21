@@ -14,7 +14,7 @@ hydra:
     tasks_per_node: 1
     cpus_per_task: 16
     mem_gb: 256
-    gres: "gpu:h100:1"
+    gres: "gpu:a100:2"
     qos: "explore"
     timeout_min: 720
     setup: ["export DEBUGVAR=$(scontrol show hostnames $SLURM_JOB_NODELIST)",
@@ -22,7 +22,7 @@ hydra:
             "export MASTER_PORT=$(for port in $(shuf -i 30000-65500 -n 20); do if [[ $(netstat -tupln 2>&1 | grep $port | wc -l) -eq 0 ]] ; then echo $port; break; fi; done;)",]
 
 # model to load for planning
-ckpt_base_path: ./checkpoints  # put absolute path here. Checkpoints will be loaded from ${ckpt_base_path}/outputs
+ckpt_base_path: /mnt/data1/minghao/bmw48/osfstorage/checkpoints/  # put absolute path here. Checkpoints will be loaded from ${ckpt_base_path}/outputs
 model_name: null
 model_epoch: latest
 

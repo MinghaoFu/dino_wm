@@ -3,6 +3,7 @@ import time
 import hydra
 import torch
 import wandb
+wandb.login(key="792a3b819c6b832d0087bd4905542a95c7236076")
 import logging
 import warnings
 import threading
@@ -34,8 +35,9 @@ class Trainer:
             log.info(f"Model saved dir: {cfg['saved_folder']}")
         cfg_dict = cfg_to_dict(cfg)
         model_name = cfg_dict["saved_folder"].split("outputs/")[-1]
-        model_name += f"_{self.cfg.env.name}_f{self.cfg.frameskip}_h{self.cfg.num_hist}_p{self.cfg.num_pred}"
+        model_name += f"_{self.cfg.env.name}_align_recon_f{self.cfg.frameskip}_h{self.cfg.num_hist}_p{self.cfg.num_pred}"
 
+        # Check if we should use multiple GPUs (only for SLURM multirun)
         if HydraConfig.get().mode == RunMode.MULTIRUN:
             log.info(" Multirun setup begin...")
             log.info(f"SLURM_JOB_NODELIST={os.environ['SLURM_JOB_NODELIST']}")
@@ -55,7 +57,6 @@ class Trainer:
                 log.error(f"DDP setup failed: {e}")
                 raise
             torch.distributed.barrier()
-            # # ==== /init ddp process group ====
 
         self.accelerator = Accelerator(log_with="wandb")
         log.info(
@@ -81,6 +82,10 @@ class Trainer:
 
         self.accelerator.wait_for_everyone()
         if self.accelerator.is_main_process:
+            # Set wandb API key and login
+            os.environ["WANDB_API_KEY"] = "792a3b819c6b832d0087bd4905542a95c7236076"
+            wandb.login(key="792a3b819c6b832d0087bd4905542a95c7236076")
+            
             wandb_run_id = None
             if os.path.exists("hydra.yaml"):
                 existing_cfg = OmegaConf.load("hydra.yaml")
@@ -98,7 +103,7 @@ class Trainer:
                 )
             else:
                 self.wandb_run = wandb.init(
-                    project="dino_wm",
+                    project="dino_wm_align_recon",  # Different project name for alignment+recon
                     config=wandb_dict,
                     id=wandb_run_id,
                     resume="allow",
@@ -195,7 +200,7 @@ class Trainer:
         return ckpt_path, model_name, model_epoch
 
     def load_ckpt(self, filename="model_latest.pth"):
-        ckpt = torch.load(filename)
+        ckpt = torch.load(filename, weights_only=False)
         for k, v in ckpt.items():
             self.__dict__[k] = v
         not_in_ckpt = set(self._keys_to_save) - set(ckpt.keys())
@@ -275,11 +280,11 @@ class Trainer:
                     decoder_path = os.path.join(
                         self.base_path, self.cfg.env.decoder_path
                     )
-                    ckpt = torch.load(decoder_path)
+                    ckpt = torch.load(decoder_path, weights_only=False)
                     if isinstance(ckpt, dict):
                         self.decoder = ckpt["decoder"]
                     else:
-                        self.decoder = torch.load(decoder_path)
+                        self.decoder = torch.load(decoder_path, weights_only=False)
                     log.info(f"Loaded decoder from {decoder_path}")
                 else:
                     self.decoder = hydra.utils.instantiate(
@@ -289,9 +294,12 @@ class Trainer:
             if not self.train_decoder:
                 for param in self.decoder.parameters():
                     param.requires_grad = False
+                    
         self.encoder, self.predictor, self.decoder = self.accelerator.prepare(
             self.encoder, self.predictor, self.decoder
         )
+        
+        # Create the model WITH alignment features
         self.model = hydra.utils.instantiate(
             self.cfg.model,
             encoder=self.encoder,
@@ -305,6 +313,13 @@ class Trainer:
             num_action_repeat=self.cfg.num_action_repeat,
             num_proprio_repeat=self.cfg.num_proprio_repeat,
         )
+        
+        # Set alignment hyperparameters if provided
+        if hasattr(self.cfg, 'alignment'):
+            if hasattr(self.cfg.alignment, 'state_consistency_loss_weight'):
+                self.model.state_consistency_loss_weight = self.cfg.alignment.state_consistency_loss_weight
+            if hasattr(self.cfg.alignment, 'alignment_regularization'):
+                self.model.alignment_regularization = self.cfg.alignment.alignment_regularization
 
     def init_optimizers(self):
         self.encoder_optimizer = torch.optim.Adam(
@@ -312,6 +327,7 @@ class Trainer:
             lr=self.cfg.training.encoder_lr,
         )
         self.encoder_optimizer = self.accelerator.prepare(self.encoder_optimizer)
+        
         if self.cfg.has_predictor:
             self.predictor_optimizer = torch.optim.AdamW(
                 self.predictor.parameters(),
@@ -327,6 +343,7 @@ class Trainer:
                 ),
                 lr=self.cfg.training.action_encoder_lr,
             )
+            
             self.action_encoder_optimizer = self.accelerator.prepare(
                 self.action_encoder_optimizer
             )
@@ -447,8 +464,9 @@ class Trainer:
             plot = i == 0  # only plot from the first batch
             self.model.train()
             
+            # Pass state for alignment loss
             z_out, visual_out, visual_reconstructed, loss, loss_components = self.model(
-                obs, act
+                obs, act, state
             )
 
             self.encoder_optimizer.zero_grad()
@@ -474,6 +492,7 @@ class Trainer:
             loss_components = {
                 key: value.mean().item() for key, value in loss_components.items()
             }
+            
             if self.cfg.has_decoder and plot:
                 # only eval images when plotting due to speed
                 if self.cfg.has_predictor:
@@ -532,8 +551,16 @@ class Trainer:
                     phase="train",
                 )
 
+            # Convert loss_components to the format expected by logs_update
             loss_components = {f"train_{k}": [v] for k, v in loss_components.items()}
             self.logs_update(loss_components)
+            
+            # Direct wandb logging for debugging
+            if self.accelerator.is_main_process:
+                wandb_log_dict = {f"train_{k}": v[0] for k, v in loss_components.items()}
+                wandb_log_dict["epoch"] = self.epoch
+                wandb_log_dict["step"] = i
+                self.wandb_run.log(wandb_log_dict)
 
     def val(self):
         self.model.eval()
@@ -560,7 +587,7 @@ class Trainer:
             plot = i == 0
             self.model.eval()
             z_out, visual_out, visual_reconstructed, loss, loss_components = self.model(
-                obs, act
+                obs, act, state
             )
 
             loss = self.accelerator.gather_for_metrics(loss).mean()
@@ -627,8 +654,16 @@ class Trainer:
                     num_samples=self.num_reconstruct_samples,
                     phase="valid",
                 )
+            # Convert loss_components to the format expected by logs_update
             loss_components = {f"val_{k}": [v] for k, v in loss_components.items()}
             self.logs_update(loss_components)
+            
+            # Direct wandb logging for debugging
+            if self.accelerator.is_main_process:
+                wandb_log_dict = {f"val_{k}": v[0] for k, v in loss_components.items()}
+                wandb_log_dict["epoch"] = self.epoch
+                wandb_log_dict["step"] = i
+                self.wandb_run.log(wandb_log_dict)
 
     def openloop_rollout(
         self, dset, num_rollout=10, rand_start_end=True, min_horizon=2, mode="train"
@@ -738,8 +773,12 @@ class Trainer:
             to_log = sum / count
             epoch_log[key] = to_log
         epoch_log["epoch"] = step
-        log.info(f"Epoch {self.epoch}  Training loss: {epoch_log['train_loss']:.4f}  \
-                Validation loss: {epoch_log['val_loss']:.4f}")
+        
+        # Log training and validation losses if they exist
+        train_loss = epoch_log.get('train_loss', 0.0)
+        val_loss = epoch_log.get('val_loss', 0.0)
+        log.info(f"Epoch {self.epoch}  Training loss: {train_loss:.4f}  \
+                Validation loss: {val_loss:.4f}")
 
         if self.accelerator.is_main_process:
             self.wandb_run.log(epoch_log)
@@ -804,6 +843,8 @@ class Trainer:
         )
 
     def plot_imgs(self, imgs, num_columns, img_name):
+        # Ensure directory exists for all processes
+        os.makedirs(os.path.dirname(img_name), exist_ok=True)
         utils.save_image(
             imgs,
             img_name,
@@ -813,7 +854,7 @@ class Trainer:
         )
 
 
-@hydra.main(config_path="conf", config_name="train")
+@hydra.main(config_path="conf", config_name="train_robomimic_align_recon")
 def main(cfg: OmegaConf):
     trainer = Trainer(cfg)
     trainer.run()

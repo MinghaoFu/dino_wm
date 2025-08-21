@@ -1,0 +1,45 @@
+# 7D Aligned + Proprio Planning Config for Robomimic
+defaults:
+  - _self_
+
+hydra:
+  run:
+    dir: plan_outputs/${now:%Y%m%d%H%M%S}_7d_aligned_gH${goal_H}
+
+# Dataset
+dataset:
+  _target_: datasets.robomimic_dset.RobomimicDataset
+  data_path: /mnt/data1/minghao/robomimic/can/ph_converted_final
+  normalize_action: true
+  relative: true
+  action_scale: 1.0
+  with_velocity: true
+
+# Model configuration  
+model_cfg:
+  model_path: /mnt/data1/minghao/robomimic/checkpoints/outputs/robomimic_can_align/outputs/2025-08-13/16-32-15
+  frameskip: 1
+
+seed: 100
+n_evals: 5
+goal_source: 'final_state'
+goal_H: 3
+n_plot_samples: 0
+model_epoch: latest
+
+debug_dset_init: False
+
+objective:
+  _target_: planning.objectives.create_objective_fn
+  alpha: 1
+  base: 2
+  mode: last
+
+planner:
+  _target_: planning.cem.CEMPlanner
+  horizon: 3
+  topk: 30
+  num_samples: 300
+  var_scale: 1
+  opt_steps: 30
+  eval_every: 1

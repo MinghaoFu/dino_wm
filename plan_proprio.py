@@ -328,8 +328,8 @@ class PlanWorkspace:
         else:
             actions_init = None
         actions, action_len = self.planner.plan(
-            obs_0=self.obs_0,
-            obs_g=self.obs_g,
+            obs_0={"proprio": self.obs_0["proprio"]},
+            obs_g={"proprio": self.obs_g["proprio"]},
             actions=actions_init,
         )
         logs, successes, _, _ = self.evaluator.eval_actions(
@@ -365,49 +365,72 @@ def load_ckpt(snapshot_path, device):
 
 def load_model(model_ckpt, train_cfg, num_action_repeat, device):
     result = {}
-    if model_ckpt.exists():
-        result = load_ckpt(model_ckpt, device)
-        print(f"Resuming from epoch {result['epoch']}: {model_ckpt}")
+    
+    if model_ckpt is None:
+        # Skip checkpoint loading for proprio-only planning - just initialize fresh models
+        print(f"Initializing fresh models for proprio-only planning (no checkpoint loading needed)")
 
-    if "encoder" not in result:
-        result["encoder"] = hydra.utils.instantiate(
-            train_cfg.encoder,
-        )
-    if "predictor" not in result:
-        raise ValueError("Predictor not found in model checkpoint")
+        # For proprio-only planning, we can use minimal components
+        result["encoder"] = None  # No visual encoder needed
+        result["predictor"] = None  # No visual predictor needed
+        result["proprio_encoder"] = None  # We'll work with raw proprio data
+        result["action_encoder"] = None  # We'll work with raw actions
+        result["decoder"] = None  # No decoder needed
 
-    if train_cfg.has_decoder and "decoder" not in result:
-        base_path = os.path.dirname(os.path.abspath(__file__))
-        if train_cfg.env.decoder_path is not None:
-            decoder_path = os.path.join(base_path, train_cfg.env.decoder_path)
-            ckpt = torch.load(decoder_path)
-            if isinstance(ckpt, dict):
-                result["decoder"] = ckpt["decoder"]
-            else:
-                result["decoder"] = torch.load(decoder_path)
-        else:
-            raise ValueError(
-                "Decoder path not found in model checkpoint \
-                                and is not provided in config"
+        # Create a minimal dummy model that won't be used
+        class DummyModel(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.dummy = torch.nn.Linear(1, 1)
+        
+        model = DummyModel()
+        model.to(device)
+        return model
+    else:
+        # Original checkpoint loading logic
+        if model_ckpt.exists():
+            result = load_ckpt(model_ckpt, device)
+            print(f"Resuming from epoch {result['epoch']}: {model_ckpt}")
+
+        if "encoder" not in result:
+            result["encoder"] = hydra.utils.instantiate(
+                train_cfg.encoder,
             )
-    elif not train_cfg.has_decoder:
-        result["decoder"] = None
+        if "predictor" not in result:
+            raise ValueError("Predictor not found in model checkpoint")
 
-    model = hydra.utils.instantiate(
-        train_cfg.model,
-        encoder=result["encoder"],
-        proprio_encoder=result["proprio_encoder"],
-        action_encoder=result["action_encoder"],
-        predictor=result["predictor"],
-        decoder=result["decoder"],
-        proprio_dim=train_cfg.proprio_emb_dim,
-        action_dim=train_cfg.action_emb_dim,
-        concat_dim=train_cfg.concat_dim,
-        num_action_repeat=num_action_repeat,
-        num_proprio_repeat=train_cfg.num_proprio_repeat,
-    )
-    model.to(device)
-    return model
+        if train_cfg.has_decoder and "decoder" not in result:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            if train_cfg.env.decoder_path is not None:
+                decoder_path = os.path.join(base_path, train_cfg.env.decoder_path)
+                ckpt = torch.load(decoder_path)
+                if isinstance(ckpt, dict):
+                    result["decoder"] = ckpt["decoder"]
+                else:
+                    result["decoder"] = torch.load(decoder_path)
+            else:
+                raise ValueError(
+                    "Decoder path not found in model checkpoint \
+                                    and is not provided in config"
+                )
+        elif not train_cfg.has_decoder:
+            result["decoder"] = None
+
+        model = hydra.utils.instantiate(
+            train_cfg.model,
+            encoder=result["encoder"],
+            proprio_encoder=result["proprio_encoder"],
+            action_encoder=result["action_encoder"],
+            predictor=result["predictor"],
+            decoder=result["decoder"],
+            proprio_dim=train_cfg.proprio_emb_dim,
+            action_dim=train_cfg.action_emb_dim,
+            concat_dim=train_cfg.concat_dim,
+            num_action_repeat=num_action_repeat,
+            num_proprio_repeat=train_cfg.num_proprio_repeat,
+        )
+        model.to(device)
+        return model
 
 
 class DummyWandbRun:
@@ -439,9 +462,37 @@ def planning_main(cfg_dict):
         wandb_run = None
 
     ckpt_base_path = cfg_dict["ckpt_base_path"]
-    model_path = f"{ckpt_base_path}/outputs/{cfg_dict['model_name']}/"
-    with open(os.path.join(model_path, "hydra.yaml"), "r") as f:
-        model_cfg = OmegaConf.load(f)
+    
+    # For proprio-only planning, use default model config since we don't need checkpoints
+    if cfg_dict['model_name'] == "proprio_only_dummy":
+        # Load a default training config for robomimic
+        model_cfg_path = os.path.join(ckpt_base_path, "conf", "train_robomimic.yaml")
+        if os.path.exists(model_cfg_path):
+            model_cfg = OmegaConf.load(model_cfg_path)
+        else:
+            # Fallback to basic config with proper structure
+            model_cfg = OmegaConf.create({
+                'num_hist': 5,
+                'num_pred': 5,
+                'frameskip': 1,
+                'num_action_repeat': 1,
+                'proprio_emb_dim': 32,
+                'action_emb_dim': 32,
+                'concat_dim': 0,
+                'num_proprio_repeat': 1,
+                'env': {
+                    'name': 'robomimic',
+                    'dataset': {
+                        '_target_': 'datasets.robomimic_dset.get_robomimic_dataset'
+                    },
+                    'args': [],
+                    'kwargs': {}
+                }
+            })
+    else:
+        model_path = f"{ckpt_base_path}/outputs/{cfg_dict['model_name']}/"
+        with open(os.path.join(model_path, "hydra.yaml"), "r") as f:
+            model_cfg = OmegaConf.load(f)
 
     seed(cfg_dict["seed"])
     _, dset = hydra.utils.call(
@@ -452,10 +503,16 @@ def planning_main(cfg_dict):
     )
     dset = dset["valid"]
 
-    num_action_repeat = model_cfg.num_action_repeat
-    model_ckpt = (
-        Path(model_path) / "checkpoints" / f"model_{cfg_dict['model_epoch']}.pth"
-    )
+    num_action_repeat = model_cfg.get('num_action_repeat', 1)
+    
+    # For proprio-only planning, no checkpoint path needed
+    if cfg_dict['model_name'] == "proprio_only_dummy":
+        model_ckpt = None
+    else:
+        model_ckpt = (
+            Path(model_path) / "checkpoints" / f"model_{cfg_dict['model_epoch']}.pth"
+        )
+    
     model = load_model(model_ckpt, model_cfg, num_action_repeat, device=device)
 
     # use dummy vector env for wall and deformable envs

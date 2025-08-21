@@ -9,8 +9,7 @@ from typing import Callable, Optional
 from .traj_dset import TrajDataset, TrajSlicerDataset
 from typing import Optional, Callable, Any
 decord.bridge.set_bridge("torch")
-
-# precomputed dataset stats
+# precomputed dataset stats 
 ACTION_MEAN = torch.tensor([-0.0087, 0.0068])
 ACTION_STD = torch.tensor([0.2019, 0.2002])
 STATE_MEAN = torch.tensor([236.6155, 264.5674, 255.1307, 266.3721, 1.9584, -2.93032027,  2.54307914])

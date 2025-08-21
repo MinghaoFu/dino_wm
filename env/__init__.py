@@ -32,3 +32,14 @@ register(
     max_episode_steps=300,
     reward_threshold=1.0,
 )
+
+register(
+    id="robomimic_can",
+    entry_point="env.robomimic.robomimic_env:RobomimicCanEnv",
+    max_episode_steps=300,
+    reward_threshold=1.0,
+    kwargs={
+        'with_velocity': True,
+        'with_target': True,
+    }
+)

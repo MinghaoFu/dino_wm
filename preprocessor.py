@@ -57,6 +57,8 @@ class Preprocessor:
         np arrays to tensors
         '''
         transformed_obs = {}
-        transformed_obs['visual'] = self.transform_obs_visual(obs['visual'])
-        transformed_obs['proprio'] = self.normalize_proprios(torch.tensor(obs['proprio']))
+        if 'visual' in obs:
+            transformed_obs['visual'] = self.transform_obs_visual(obs['visual'])
+        if 'proprio' in obs:
+            transformed_obs['proprio'] = self.normalize_proprios(torch.tensor(obs['proprio']))
         return transformed_obs

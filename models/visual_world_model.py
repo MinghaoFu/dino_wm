@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torchvision import transforms
 from einops import rearrange, repeat
+from .flow_kl_loss import ConditionalFlowKLLoss
 
 class VWorldModel(nn.Module):
     def __init__(
@@ -66,6 +67,20 @@ class VWorldModel(nn.Module):
         self.decoder_criterion = nn.MSELoss()
         self.decoder_latent_loss_weight = 0.25
         self.emb_criterion = nn.MSELoss()
+        
+        # Linear alignment loss for state supervision
+        self.state_consistency_loss_weight = 1.0
+        self.alignment_W = None  # Linear transformation matrix W: R^{64} -> R^{state_dim}
+        self.alignment_regularization = 1e-4  # L2 regularization on W
+        
+        # Conditional Flow KL divergence loss
+        self.flow_kl_loss_weight = 1.0
+        self.flow_kl_loss_enabled = False  # Will be set via config
+        self.flow_kl_loss = ConditionalFlowKLLoss(
+            z_dim=128,  # DINO feature dimension
+            state_dim=7,  # Robomimic state dimension
+            hidden_dim=256
+        )
 
     def train(self, mode=True):
         super().train(mode)
@@ -73,7 +88,8 @@ class VWorldModel(nn.Module):
             self.encoder.train(mode)
         if self.predictor is not None and self.train_predictor:
             self.predictor.train(mode)
-        self.proprio_encoder.train(mode)
+        if self.proprio_encoder is not None:
+            self.proprio_encoder.train(mode)
         self.action_encoder.train(mode)
         if self.decoder is not None and self.train_decoder:
             self.decoder.train(mode)
@@ -83,7 +99,8 @@ class VWorldModel(nn.Module):
         self.encoder.eval()
         if self.predictor is not None:
             self.predictor.eval()
-        self.proprio_encoder.eval()
+        if self.proprio_encoder is not None:
+            self.proprio_encoder.eval()
         self.action_encoder.eval()
         if self.decoder is not None:
             self.decoder.eval()
@@ -131,6 +148,7 @@ class VWorldModel(nn.Module):
 
         proprio = obs['proprio']
         proprio_emb = self.encode_proprio(proprio)
+        
         return {"visual": visual_embs, "proprio": proprio_emb}
 
     def predict(self, z):  # in embedding space
@@ -185,11 +203,69 @@ class VWorldModel(nn.Module):
             z_act = z_act[:, :, 0, : self.action_dim // self.num_action_repeat]
         z_obs = {"visual": z_visual, "proprio": z_proprio}
         return z_obs, z_act
+    
+    def compute_detailed_state_alignment(self, obs, act, state):
+        """
+        Compute detailed per-dimension alignment metrics for analysis
+        Returns dict with per-dimension metrics
+        """
+        with torch.no_grad():
+            self.eval()
+            z = self.encode(obs, act)
+            z_src = z[:, : self.num_hist, :, :]
+            
+            if self.predictor is not None:
+                z_pred = self.predict(z_src)
+                
+                if state is not None and self.state_projection is not None:
+                    # Extract visual embeddings for state consistency
+                    if self.concat_dim == 0:
+                        z_visual_for_state = z_pred[:, :, :-2, :]
+                    elif self.concat_dim == 1:
+                        z_visual_for_state = z_pred[:, :, :, :-(self.proprio_dim + self.action_dim)]
+                    
+                    # Take half of the features for state consistency
+                    half_dim = z_visual_for_state.shape[-1] // 2
+                    z_state_features = z_visual_for_state[:, :, :, :half_dim]
+                    z_state_avg = z_state_features.mean(dim=2)
+                    predicted_state = self.state_projection(z_state_avg)
+                    
+                    state_tgt = state[:, self.num_pred:, :]
+                    
+                    # Per-dimension metrics
+                    state_dim = state_tgt.shape[-1]
+                    per_dim_metrics = {}
+                    
+                    for dim in range(state_dim):
+                        pred_dim = predicted_state[:, :, dim].flatten()
+                        tgt_dim = state_tgt[:, :, dim].flatten()
+                        
+                        # MAE per dimension
+                        mae_dim = torch.mean(torch.abs(pred_dim - tgt_dim))
+                        per_dim_metrics[f"state_dim_{dim}_mae"] = mae_dim.item()
+                        
+                        # Correlation per dimension
+                        if len(pred_dim) > 1:
+                            pred_centered = pred_dim - torch.mean(pred_dim)
+                            tgt_centered = tgt_dim - torch.mean(tgt_dim)
+                            correlation = torch.sum(pred_centered * tgt_centered) / (
+                                torch.sqrt(torch.sum(pred_centered**2)) * torch.sqrt(torch.sum(tgt_centered**2)) + 1e-8
+                            )
+                            per_dim_metrics[f"state_dim_{dim}_correlation"] = correlation.item()
+                        
+                        # RMSE per dimension
+                        rmse_dim = torch.sqrt(torch.mean((pred_dim - tgt_dim)**2))
+                        per_dim_metrics[f"state_dim_{dim}_rmse"] = rmse_dim.item()
+                    
+                    return per_dim_metrics
+            
+            return {}
 
-    def forward(self, obs, act):
+    def forward(self, obs, act, state=None):
         """
         input:  obs (dict):  "visual", "proprio" (b, num_frames, 3, img_size, img_size)
                 act: (b, num_frames, action_dim)
+                state: (b, num_frames, state_dim) - true state variables for consistency loss
         output: z_pred: (b, num_hist, num_patches, emb_dim)
                 visual_pred: (b, num_hist, 3, img_size, img_size)
                 visual_reconstructed: (b, num_frames, 3, img_size, img_size)
@@ -242,6 +318,83 @@ class VWorldModel(nn.Module):
             loss_components["z_loss"] = z_loss
             loss_components["z_visual_loss"] = z_visual_loss
             loss_components["z_proprio_loss"] = z_proprio_loss
+            
+            # Linear alignment loss with true state variables
+            if state is not None:
+                # Initialize alignment matrix W if not done yet
+                if self.alignment_W is None:
+                    state_dim = state.shape[-1]
+                    half_dim = self.encoder.emb_dim // 2  # 64 dimensions from DINO
+                    # W: R^{64} -> R^{state_dim}
+                    self.alignment_W = nn.Parameter(torch.randn(half_dim, state_dim, device=state.device) * 0.01)
+                
+                # Extract visual embeddings and use half for state alignment
+                if self.concat_dim == 0:
+                    z_visual_for_state = z_pred[:, :, :-2, :]  # (b, num_hist, num_patches, emb_dim)
+                elif self.concat_dim == 1:
+                    z_visual_for_state = z_pred[:, :, :, :-(self.proprio_dim + self.action_dim)]
+                
+                # Take first half of the features (64 dims) for state alignment
+                half_dim = z_visual_for_state.shape[-1] // 2
+                z_hat = z_visual_for_state[:, :, :, :half_dim]  # (b, num_hist, num_patches, 64)
+                
+                # Average over patches to get single representation per timestep
+                z_hat_avg = z_hat.mean(dim=2)  # (b, num_hist, 64)
+                
+                # Get target states for the predicted frames
+                z_target = state[:, self.num_pred:, :]  # (b, num_hist, state_dim)
+                
+                # Optional: Center the representations
+                z_hat_centered = z_hat_avg - torch.mean(z_hat_avg, dim=(0,1), keepdim=True)
+                z_target_centered = z_target - torch.mean(z_target, dim=(0,1), keepdim=True)
+                
+                # Linear alignment: W^T @ z_hat ≈ z_target
+                # z_hat: (b, num_hist, 64), W: (64, state_dim) -> projected: (b, num_hist, state_dim)
+                z_projected = torch.matmul(z_hat_centered, self.alignment_W)
+                
+                # L2 alignment loss: ||W^T @ z_hat - z_target||_2^2
+                alignment_loss = torch.mean((z_projected - z_target_centered)**2)
+                
+                # L2 regularization on W: λ ||W||_F^2
+                w_regularization = self.alignment_regularization * torch.sum(self.alignment_W**2)
+                
+                # Total state consistency loss
+                state_consistency_loss = alignment_loss + w_regularization
+                loss = loss + self.state_consistency_loss_weight * state_consistency_loss
+                loss_components["state_consistency_loss"] = state_consistency_loss
+                loss_components["alignment_loss"] = alignment_loss
+                loss_components["w_regularization"] = w_regularization
+            
+            # DINO feature reconstruction loss (384D -> 128D -> 384D)
+            if hasattr(self.encoder, 'recon_dino_loss') and self.encoder.recon_dino_loss:
+                # Get DINO reconstruction loss from encoder
+                dino_recon_loss = getattr(self.encoder, 'last_recon_loss', None)
+                if dino_recon_loss is not None and hasattr(self, 'dino_recon_loss_weight'):
+                    loss = loss + self.dino_recon_loss_weight * dino_recon_loss
+                    loss_components["dino_recon_loss"] = dino_recon_loss
+            
+            # Conditional Flow KL divergence loss
+            if self.flow_kl_loss_enabled and state is not None:
+                # Extract DINO visual features from z_pred for KL loss
+                # z_pred shape: (batch_size, num_hist, num_patches, emb_dim)
+                if self.concat_dim == 0:
+                    # Visual features are in all patches except last two (proprio, action)
+                    z_visual = z_pred[:, :, :-2, :]  # (batch_size, num_hist, num_patches-2, emb_dim)
+                elif self.concat_dim == 1:
+                    # Visual features are in the first part of embedding dimension
+                    visual_dim = self.encoder.emb_dim  # 128 for DINO
+                    z_visual = z_pred[:, :, :, :visual_dim]  # (batch_size, num_hist, num_patches, 128)
+                
+                # Average over patches to get per-frame visual features
+                z_visual_avg = z_visual.mean(dim=2)  # (batch_size, num_hist, visual_dim)
+                
+                # Take state for the predicted frames (matching z_pred temporal dimension)
+                state_pred_frames = state[:, self.num_pred:, :]  # (batch_size, num_hist, state_dim)
+                
+                # Compute conditional flow KL loss
+                flow_kl_loss = self.flow_kl_loss(z_visual_avg, state_pred_frames)
+                loss = loss + self.flow_kl_loss_weight * flow_kl_loss
+                loss_components["flow_kl_loss"] = flow_kl_loss
         else:
             visual_pred = None
             z_pred = None

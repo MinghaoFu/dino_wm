@@ -1,4 +1,54 @@
+# Large files and datasets
+*.zip
+*.tar.gz
+*.h5
+*.hdf5
+*.pkl
+*.npy
+*.npz
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+*.bin
+*.png
+
+# Python cache
 __pycache__
 *.pyc
+.pytest_cache/
+
+# Outputs and logs
 outputs
 plan_outputs
+*.log
+nohup.out
+*.out
+wandb/
+
+# Data directories
+datasets/
+data/
+dinov2_features/
+checkpoints/
+train/
+valid/
+rollout_plots/
+
+# Environment files
+.env
+environment.yaml
+requirements.txt
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Hydra outputs
+hydra.yaml

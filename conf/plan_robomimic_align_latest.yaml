@@ -1,0 +1,40 @@
+# DINO WM planning config for robomimic with latest trained alignment checkpoint
+defaults:
+  - _self_
+
+hydra:
+  run:
+    dir: plan_outputs/${now:%Y%m%d%H%M%S}_${replace_slash:${model_name}}_gH${goal_H}
+
+# model to load for planning - point to latest trained alignment checkpoint
+ckpt_base_path: /mnt/data1/minghao/robomimic/checkpoints/outputs/robomimic_can_align/outputs/2025-08-13/16-32-15
+model_name: robomimic_align_latest
+model_epoch: latest
+
+seed: 99
+n_evals: 10
+goal_source: 'dset'
+goal_H: 5 
+n_plot_samples: 10
+
+debug_dset_init: False
+
+objective:
+  _target_: planning.objectives.create_objective_fn
+  alpha: 1
+  base: 2
+  mode: last
+
+planner:
+  _target_: planning.mpc.MPCPlanner
+  max_iter: null 
+  n_taken_actions: 5
+  sub_planner:
+    target: planning.cem.CEMPlanner
+    horizon: 5
+    topk: 30
+    num_samples: 300
+    var_scale: 1
+    opt_steps: 30
+    eval_every: 1
+  name: mpc_cem
