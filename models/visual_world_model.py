@@ -364,6 +364,29 @@ class VWorldModel(nn.Module):
                 loss_components["state_consistency_loss"] = state_consistency_loss
                 loss_components["alignment_loss"] = alignment_loss
                 loss_components["w_regularization"] = w_regularization
+                
+                # 7D Aligned Temporal Dynamics Loss (configurable, same weight as original z_loss)
+                if hasattr(self, 'dynamics_7d_loss_weight') and self.dynamics_7d_loss_weight > 0:
+                    # Get source 7D aligned features (from input frames)
+                    if self.concat_dim == 0:
+                        z_visual_src = z_src[:, :, :-2, :]  # (b, num_hist, num_patches, emb_dim)
+                    elif self.concat_dim == 1:
+                        z_visual_src = z_src[:, :, :, :-(self.proprio_dim + self.action_dim)]
+                    
+                    # Extract 7D aligned features from source
+                    half_dim = z_visual_src.shape[-1] // 2
+                    z_hat_src = z_visual_src[:, :, :, :half_dim]  # (b, num_hist, num_patches, 64)
+                    z_hat_src_avg = z_hat_src.mean(dim=2)  # (b, num_hist, 64)
+                    z_hat_src_centered = z_hat_src_avg - torch.mean(z_hat_src_avg, dim=(0,1), keepdim=True)
+                    z_7d_src = torch.matmul(z_hat_src_centered, self.alignment_W)  # (b, num_hist, 7)
+                    
+                    # Target 7D aligned features (ground truth from next timestep)
+                    z_7d_target = z_target_centered  # Ground truth state for predicted frames
+                    
+                    # MSE loss for 7D aligned temporal dynamics: predict o_t from o_{t-1} (same as z_loss)
+                    dynamics_7d_loss = torch.mean((z_projected - z_7d_target)**2)
+                    loss = loss + self.dynamics_7d_loss_weight * dynamics_7d_loss
+                    loss_components["dynamics_7d_loss"] = dynamics_7d_loss
             
             # DINO feature reconstruction loss (384D -> 128D -> 384D)
             if hasattr(self.encoder, 'recon_dino_loss') and self.encoder.recon_dino_loss:

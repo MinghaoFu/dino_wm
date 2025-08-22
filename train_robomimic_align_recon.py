@@ -320,6 +320,10 @@ class Trainer:
                 self.model.state_consistency_loss_weight = self.cfg.alignment.state_consistency_loss_weight
             if hasattr(self.cfg.alignment, 'alignment_regularization'):
                 self.model.alignment_regularization = self.cfg.alignment.alignment_regularization
+            if hasattr(self.cfg.alignment, 'dynamics_7d_loss_weight'):
+                self.model.dynamics_7d_loss_weight = self.cfg.alignment.dynamics_7d_loss_weight
+            else:
+                self.model.dynamics_7d_loss_weight = 0.0  # Default: disabled
 
     def init_optimizers(self):
         self.encoder_optimizer = torch.optim.Adam(

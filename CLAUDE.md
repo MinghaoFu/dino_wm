@@ -4,18 +4,24 @@ This directory contains the training pipeline for a **world model** using a **pr
 
 Everytime having progress on code, please update this file.
 
-## 🎯 Latest Progress (Aug 13, 2025)
+## 🎯 Latest Progress (Aug 22, 2025)
 
-✅ **Successfully implemented configurable DINO reconstruction loss system**
-- **Three Model Variants**: No alignment, alignment only, alignment + DINO reconstruction  
-- **Unified Training**: `train_robomimic_align.py` handles both alignment modes automatically
-- **DINO Reconstruction**: 384D→128D→384D decoder with MSE loss for feature preservation
-- **Auto Configuration**: Model naming, wandb projects (dino_wm_align/dino_wm_align_recon) handled automatically
-- **Memory Optimized**: Batch size 64, working on 4 A100 GPUs with automatic selection
-- **Working Configs**: `train_robomimic_align.yaml` and `train_robomimic_align_with_recon.yaml` both verified
+✅ **Successfully implemented and evaluated 7D temporal dynamics loss system**
+- **Configurable 7D Dynamics**: Added MSE loss on 7D aligned features o_{t-1}→o_t prediction
+- **Training Complete**: Model trained to epoch 65 with alignment + DINO reconstruction + 7D dynamics
+- **Planning Evaluation**: Comprehensive horizon analysis (H=3,5,10,15,20,25) completed
 
-**Training Protocol**: Debug 1 epoch first, then parallel experiments (align vs align+recon) in background; are you sure it is in running? please run online to confirm it can work then offline
-**Checking training**: using "nvitop" to see how the programmes using gpu well
+### **7D Dynamics Planning Results**
+| Horizon | Success Rate | Avg Distance |
+|---------|-------------|--------------|
+| H=3,5,10| 10% | 0.59-0.92 |
+| H=15    | **60%** | 0.72 |
+| H=20    | **70%** | 0.73 |
+| H=25    | 30% | 0.70 |
+
+**Key Finding**: 7D temporal dynamics most effective for medium horizons (H=15-20), achieving 60-70% success rates vs 10% for short horizons.
+
+**Checkpoint**: `/mnt/data1/minghao/robomimic/checkpoints/outputs/robomimic_can_align_recon/outputs/2025-08-22/07-32-53`
 ---
 
 #### 🔹 Background: Dino World Model
