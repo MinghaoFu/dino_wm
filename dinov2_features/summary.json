@@ -1,0 +1,17 @@
+{
+  "total_samples": 100,
+  "feature_dim": 1,
+  "feature_shape": [
+    100,
+    1,
+    1024
+  ],
+  "action_shape": [
+    100,
+    2
+  ],
+  "state_shape": [
+    100,
+    4
+  ]
+}
