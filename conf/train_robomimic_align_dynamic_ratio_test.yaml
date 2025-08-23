@@ -1,0 +1,19 @@
+# @package _global_
+defaults:
+  - _self_
+  - train_robomimic_align_with_recon
+
+epochs: 1  # Test with 1 epoch
+
+# Override alignment settings for dynamic ratio experiments
+alignment:
+  state_consistency_loss_weight: 1.0
+  alignment_regularization: 0.01
+  dynamics_7d_loss_weight: 1.0  # Enable 7D dynamics loss
+  dynamic_ratio: 0.3  # Only 2 out of 7 dims are dynamic (0.3 * 7 = 2)
+  alignment_feature_selection: 'isolate'  # Use first 64 dims (default)
+
+# Update wandb project name
+wandb:
+  project: dino_wm_7d_dynamic_ratio_test
+  name: "test_7d_dynamics_ratio_${alignment.dynamic_ratio}_${alignment.alignment_feature_selection}"

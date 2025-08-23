@@ -324,6 +324,18 @@ class Trainer:
                 self.model.dynamics_7d_loss_weight = self.cfg.alignment.dynamics_7d_loss_weight
             else:
                 self.model.dynamics_7d_loss_weight = 0.0  # Default: disabled
+            
+            # Dynamic ratio parameter
+            if hasattr(self.cfg.alignment, 'dynamic_ratio'):
+                self.model.dynamic_ratio = self.cfg.alignment.dynamic_ratio
+            else:
+                self.model.dynamic_ratio = 1.0  # Default: all 7 dims are dynamic
+                
+            # Alignment feature selection method
+            if hasattr(self.cfg.alignment, 'alignment_feature_selection'):
+                self.model.alignment_feature_selection = self.cfg.alignment.alignment_feature_selection
+            else:
+                self.model.alignment_feature_selection = 'isolate'  # Default: isolate first 64 dims
 
     def init_optimizers(self):
         self.encoder_optimizer = torch.optim.Adam(

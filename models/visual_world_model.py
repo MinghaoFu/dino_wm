@@ -334,9 +334,21 @@ class VWorldModel(nn.Module):
                 elif self.concat_dim == 1:
                     z_visual_for_state = z_pred[:, :, :, :-(self.proprio_dim + self.action_dim)]
                 
-                # Take first half of the features (64 dims) for state alignment
-                half_dim = z_visual_for_state.shape[-1] // 2
-                z_hat = z_visual_for_state[:, :, :, :half_dim]  # (b, num_hist, num_patches, 64)
+                # Configurable feature selection for state alignment
+                alignment_feature_selection = getattr(self, 'alignment_feature_selection', 'isolate')  # Default: isolate
+                target_dim = 64  # Target dimension for alignment
+                
+                if alignment_feature_selection == 'isolate':
+                    # Take first 64 dims for state alignment
+                    z_hat = z_visual_for_state[:, :, :, :target_dim]  # (b, num_hist, num_patches, 64)
+                elif alignment_feature_selection == 'mapping':
+                    # Use MLP to map full dims to 64 dims
+                    if not hasattr(self, 'alignment_feature_mlp'):
+                        input_dim = z_visual_for_state.shape[-1]
+                        self.alignment_feature_mlp = nn.Linear(input_dim, target_dim).to(z_visual_for_state.device)
+                    z_hat = self.alignment_feature_mlp(z_visual_for_state)  # (b, num_hist, num_patches, 64)
+                else:
+                    raise ValueError(f"Unknown alignment_feature_selection: {alignment_feature_selection}")
                 
                 # Average over patches to get single representation per timestep
                 z_hat_avg = z_hat.mean(dim=2)  # (b, num_hist, 64)
@@ -373,9 +385,11 @@ class VWorldModel(nn.Module):
                     elif self.concat_dim == 1:
                         z_visual_src = z_src[:, :, :, :-(self.proprio_dim + self.action_dim)]
                     
-                    # Extract 7D aligned features from source
-                    half_dim = z_visual_src.shape[-1] // 2
-                    z_hat_src = z_visual_src[:, :, :, :half_dim]  # (b, num_hist, num_patches, 64)
+                    # Extract features for 7D alignment (using same selection method)
+                    if alignment_feature_selection == 'isolate':
+                        z_hat_src = z_visual_src[:, :, :, :target_dim]  # (b, num_hist, num_patches, 64)
+                    elif alignment_feature_selection == 'mapping':
+                        z_hat_src = self.alignment_feature_mlp(z_visual_src)  # (b, num_hist, num_patches, 64)
                     z_hat_src_avg = z_hat_src.mean(dim=2)  # (b, num_hist, 64)
                     z_hat_src_centered = z_hat_src_avg - torch.mean(z_hat_src_avg, dim=(0,1), keepdim=True)
                     z_7d_src = torch.matmul(z_hat_src_centered, self.alignment_W)  # (b, num_hist, 7)
@@ -383,10 +397,18 @@ class VWorldModel(nn.Module):
                     # Target 7D aligned features (ground truth from next timestep)
                     z_7d_target = z_target_centered  # Ground truth state for predicted frames
                     
-                    # MSE loss for 7D aligned temporal dynamics: predict o_t from o_{t-1} (same as z_loss)
-                    dynamics_7d_loss = torch.mean((z_projected - z_7d_target)**2)
+                    # Apply dynamic ratio: only compute loss on subset of 7D features
+                    dynamic_ratio = getattr(self, 'dynamic_ratio', 1.0)  # Default: all 7 dims are dynamic
+                    n_dynamic_dims = int(7 * dynamic_ratio)  # 0.3 * 7 = 2 dims
+                    
+                    # MSE loss only on the first n_dynamic_dims (remaining dims assumed static)
+                    z_projected_dynamic = z_projected[:, :, :n_dynamic_dims]  # (b, num_hist, n_dynamic_dims)
+                    z_7d_target_dynamic = z_7d_target[:, :, :n_dynamic_dims]  # (b, num_hist, n_dynamic_dims)
+                    
+                    dynamics_7d_loss = torch.mean((z_projected_dynamic - z_7d_target_dynamic)**2)
                     loss = loss + self.dynamics_7d_loss_weight * dynamics_7d_loss
                     loss_components["dynamics_7d_loss"] = dynamics_7d_loss
+                    loss_components["n_dynamic_dims"] = n_dynamic_dims
             
             # DINO feature reconstruction loss (384D -> 128D -> 384D)
             if hasattr(self.encoder, 'recon_dino_loss') and self.encoder.recon_dino_loss:
