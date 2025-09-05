@@ -1,17 +1,99 @@
-# @package _global_
 defaults:
   - _self_
-  - train_robomimic_align_with_recon
+  - env: robomimic_can
+  - encoder: dino 
+  - action_encoder: proprio
+  - proprio_encoder: proprio
+  - decoder: vqvae
+  - predictor: vit
 
-# Override alignment settings for dynamic ratio experiments
+# Override encoder to enable DINO reconstruction loss
+encoder:
+  _target_: models.dino.DinoV2Encoder
+  name: "dinov2_vits14"
+  feature_key: "x_norm_patchtokens"
+  projected_dim: 128
+  z_dim: 12  # Configurable z dimension for MLP encoder
+  recon_dino_loss: true
+
+# Base path for local execution
+ckpt_base_path: ./outputs
+
+# Clean hydra config without any submitit
+hydra:
+  run:
+    dir: ./outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+# Single GPU training settings
+training:
+  seed: 0
+  epochs: 100  # Full training
+  batch_size: 32  # Single GPU batch size
+  save_every_x_epoch: 5
+  reconstruct_every_x_batch: 500
+  num_reconstruct_samples: 2
+  encoder_lr: 1e-6
+  decoder_lr: 3e-4
+  predictor_lr: 5e-4
+  action_encoder_lr: 5e-4
+
+img_size: 224 # should be a multiple of 224
+frameskip: 5
+concat_dim: 1
+
+normalize_action: True
+
+# action encoder - 适配 robomimic 的 7D 动作空间
+action_emb_dim: 16  # 增加维度以处理更复杂的动作空间
+num_action_repeat: 1
+
+# proprio encoder - 适配 robomimic 的 23D 状态空间
+proprio_emb_dim: 32  # 增加维度以处理更复杂的状态空间
+num_proprio_repeat: 1
+
+num_hist: 3
+num_pred: 1 # only supports 1
+has_predictor: True # set this to False for only training a decoder
+has_decoder: True # set this to False for only training a predictor
+
+model:
+  _target_: models.visual_world_model.VWorldModel
+  image_size: ${img_size}
+  num_hist: ${num_hist}
+  num_pred: ${num_pred}
+  train_encoder: False
+  train_predictor: True
+  train_decoder: True
+
+# Alignment settings with new architecture: 12D z-space, InfoNCE alignment, full dynamics
 alignment:
   state_consistency_loss_weight: 1.0
   alignment_regularization: 0.01
-  dynamics_7d_loss_weight: 1.0  # Enable 7D dynamics loss
-  dynamic_ratio: 0.3  # Only 2 out of 7 dims are dynamic (0.3 * 7 = 2)
-  alignment_feature_selection: 'isolate'  # Use first 64 dims (default)
+  dynamics_7d_loss_weight: 1.0  # Enable full 12D dynamics prediction (t-1 → t)
+  # dynamic_ratio removed - now using full 12D dynamics instead of partial
+  # alignment_feature_selection removed - now using first 7D of z_dim directly
 
-# Update wandb project name
+# DINO reconstruction: 12D z → 384D DINO features  
+dino_reconstruction:
+  enabled: true
+  loss_weight: 1.0  # Reconstruction loss weight for 12D → 384D pathway
+
+debug: False 
+
+# Auto GPU selection
+num_gpus: 1  # Number of GPUs to automatically select
+min_free_memory_gb: 2.0  # Minimum free memory required per GPU
+
+# Planning params for planning eval jobs launched during training
+plan_settings: 
+  # plan_cfg_path: conf/plan.yaml # set to null for no planning evals
+  plan_cfg_path: null 
+  planner: ['gd', 'cem']
+  goal_source: ['dset', 'random_state']
+  goal_H: [5]
+  alpha: [0.1, 1]
+
+# WandB settings
 wandb:
-  project: dino_wm_7d_dynamic_ratio
-  name: "7d_dynamics_ratio_${alignment.dynamic_ratio}_${alignment.alignment_feature_selection}"
+  project: dino_wm_12d_infonce_alignment
+  name: "12d_z_infonce_alignment_zdim${encoder.z_dim}"

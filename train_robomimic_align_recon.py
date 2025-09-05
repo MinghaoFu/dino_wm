@@ -9,6 +9,8 @@ import warnings
 import threading
 import itertools
 import numpy as np
+import subprocess
+import sys
 from tqdm import tqdm
 from omegaconf import OmegaConf, open_dict
 from einops import rearrange
@@ -23,9 +25,11 @@ from datetime import timedelta
 from concurrent.futures import ThreadPoolExecutor
 from metrics.image_metrics import eval_images
 from utils import slice_trajdict_with_t, cfg_to_dict, seed, sample_tensors
+from gpu_utils.gpu_utils import auto_select_gpus
 
 warnings.filterwarnings("ignore")
 log = logging.getLogger(__name__)
+
 
 class Trainer:
     def __init__(self, cfg):
@@ -872,6 +876,9 @@ class Trainer:
 
 @hydra.main(config_path="conf", config_name="train_robomimic_align_recon")
 def main(cfg: OmegaConf):
+    # Auto-select GPUs with lowest memory usage
+    selected_gpus = auto_select_gpus(getattr(cfg, 'num_gpus', 1), getattr(cfg, 'min_free_memory_gb', 2.0))
+    
     trainer = Trainer(cfg)
     trainer.run()
 

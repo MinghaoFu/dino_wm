@@ -319,55 +319,55 @@ class VWorldModel(nn.Module):
             loss_components["z_visual_loss"] = z_visual_loss
             loss_components["z_proprio_loss"] = z_proprio_loss
             
-            # Linear alignment loss with true state variables
+            # New alignment approach: MLP encoder (384→z_dim) + linear mapping (7D of z_dim→7D) + InfoNCE
             if state is not None:
-                # Initialize alignment matrix W if not done yet
+                # Initialize alignment matrix W if not done yet (maps 7D of z_dim to 7D state)
                 if self.alignment_W is None:
-                    state_dim = state.shape[-1]
-                    half_dim = self.encoder.emb_dim // 2  # 64 dimensions from DINO
-                    # W: R^{64} -> R^{state_dim}
-                    self.alignment_W = nn.Parameter(torch.randn(half_dim, state_dim, device=state.device) * 0.01)
+                    state_dim = state.shape[-1]  # Should be 7
+                    # W: R^7 -> R^7 (linear mapping from 7D of z_dim to 7D state)
+                    self.alignment_W = nn.Parameter(torch.randn(7, state_dim, device=state.device) * 0.01)
                 
-                # Extract visual embeddings and use half for state alignment
+                # Extract visual embeddings (now z_dim dimensional from MLP encoder)
                 if self.concat_dim == 0:
-                    z_visual_for_state = z_pred[:, :, :-2, :]  # (b, num_hist, num_patches, emb_dim)
+                    z_visual_for_state = z_pred[:, :, :-2, :]  # (b, num_hist, num_patches, z_dim)
                 elif self.concat_dim == 1:
                     z_visual_for_state = z_pred[:, :, :, :-(self.proprio_dim + self.action_dim)]
                 
-                # Configurable feature selection for state alignment
-                alignment_feature_selection = getattr(self, 'alignment_feature_selection', 'isolate')  # Default: isolate
-                target_dim = 64  # Target dimension for alignment
-                
-                if alignment_feature_selection == 'isolate':
-                    # Take first 64 dims for state alignment
-                    z_hat = z_visual_for_state[:, :, :, :target_dim]  # (b, num_hist, num_patches, 64)
-                elif alignment_feature_selection == 'mapping':
-                    # Use MLP to map full dims to 64 dims
-                    if not hasattr(self, 'alignment_feature_mlp'):
-                        input_dim = z_visual_for_state.shape[-1]
-                        self.alignment_feature_mlp = nn.Linear(input_dim, target_dim).to(z_visual_for_state.device)
-                    z_hat = self.alignment_feature_mlp(z_visual_for_state)  # (b, num_hist, num_patches, 64)
-                else:
-                    raise ValueError(f"Unknown alignment_feature_selection: {alignment_feature_selection}")
-                
                 # Average over patches to get single representation per timestep
-                z_hat_avg = z_hat.mean(dim=2)  # (b, num_hist, 64)
+                z_avg = z_visual_for_state.mean(dim=2)  # (b, num_hist, z_dim)
+                
+                # Extract first 7 dimensions for state alignment
+                z_7d = z_avg[:, :, :7]  # (b, num_hist, 7) - first 7 dims of z_dim
                 
                 # Get target states for the predicted frames
-                z_target = state[:, self.num_pred:, :]  # (b, num_hist, state_dim)
+                z_target = state[:, self.num_pred:, :]  # (b, num_hist, 7)
                 
-                # Optional: Center the representations
-                z_hat_centered = z_hat_avg - torch.mean(z_hat_avg, dim=(0,1), keepdim=True)
-                z_target_centered = z_target - torch.mean(z_target, dim=(0,1), keepdim=True)
+                # Linear mapping: W^T @ z_7d -> 7D aligned features
+                z_aligned = torch.matmul(z_7d, self.alignment_W)  # (b, num_hist, 7)
                 
-                # Linear alignment: W^T @ z_hat ≈ z_target
-                # z_hat: (b, num_hist, 64), W: (64, state_dim) -> projected: (b, num_hist, state_dim)
-                z_projected = torch.matmul(z_hat_centered, self.alignment_W)
+                # InfoNCE loss for alignment
+                def infonce_loss(z_aligned, z_target, temperature=0.1):
+                    # Flatten batch and time dimensions
+                    z_aligned_flat = z_aligned.reshape(-1, z_aligned.shape[-1])  # (b*num_hist, 7)
+                    z_target_flat = z_target.reshape(-1, z_target.shape[-1])    # (b*num_hist, 7)
+                    
+                    # Normalize features
+                    z_aligned_norm = torch.nn.functional.normalize(z_aligned_flat, dim=1)
+                    z_target_norm = torch.nn.functional.normalize(z_target_flat, dim=1)
+                    
+                    # Compute similarity matrix
+                    logits = torch.matmul(z_aligned_norm, z_target_norm.T) / temperature  # (N, N)
+                    
+                    # Positive pairs are on the diagonal
+                    labels = torch.arange(logits.shape[0], device=logits.device)
+                    
+                    # Cross-entropy loss
+                    loss_ce = torch.nn.functional.cross_entropy(logits, labels)
+                    return loss_ce
                 
-                # L2 alignment loss: ||W^T @ z_hat - z_target||_2^2
-                alignment_loss = torch.mean((z_projected - z_target_centered)**2)
+                alignment_loss = infonce_loss(z_aligned, z_target)
                 
-                # L2 regularization on W: λ ||W||_F^2
+                # L2 regularization on W
                 w_regularization = self.alignment_regularization * torch.sum(self.alignment_W**2)
                 
                 # Total state consistency loss
@@ -377,38 +377,22 @@ class VWorldModel(nn.Module):
                 loss_components["alignment_loss"] = alignment_loss
                 loss_components["w_regularization"] = w_regularization
                 
-                # 7D Aligned Temporal Dynamics Loss (configurable, same weight as original z_loss)
+                # Temporal dynamics prediction: use all 12 dims from t-1 to predict t
                 if hasattr(self, 'dynamics_7d_loss_weight') and self.dynamics_7d_loss_weight > 0:
-                    # Get source 7D aligned features (from input frames)
+                    # Get source z features (from input frames) - use all z_dim dimensions
                     if self.concat_dim == 0:
-                        z_visual_src = z_src[:, :, :-2, :]  # (b, num_hist, num_patches, emb_dim)
+                        z_visual_src = z_src[:, :, :-2, :]  # (b, num_hist, num_patches, z_dim)
                     elif self.concat_dim == 1:
                         z_visual_src = z_src[:, :, :, :-(self.proprio_dim + self.action_dim)]
                     
-                    # Extract features for 7D alignment (using same selection method)
-                    if alignment_feature_selection == 'isolate':
-                        z_hat_src = z_visual_src[:, :, :, :target_dim]  # (b, num_hist, num_patches, 64)
-                    elif alignment_feature_selection == 'mapping':
-                        z_hat_src = self.alignment_feature_mlp(z_visual_src)  # (b, num_hist, num_patches, 64)
-                    z_hat_src_avg = z_hat_src.mean(dim=2)  # (b, num_hist, 64)
-                    z_hat_src_centered = z_hat_src_avg - torch.mean(z_hat_src_avg, dim=(0,1), keepdim=True)
-                    z_7d_src = torch.matmul(z_hat_src_centered, self.alignment_W)  # (b, num_hist, 7)
+                    z_src_avg = z_visual_src.mean(dim=2)  # (b, num_hist, z_dim) - all 12 dims
+                    z_pred_avg = z_avg  # (b, num_hist, z_dim) - predicted features
                     
-                    # Target 7D aligned features (ground truth from next timestep)
-                    z_7d_target = z_target_centered  # Ground truth state for predicted frames
-                    
-                    # Apply dynamic ratio: only compute loss on subset of 7D features
-                    dynamic_ratio = getattr(self, 'dynamic_ratio', 1.0)  # Default: all 7 dims are dynamic
-                    n_dynamic_dims = int(7 * dynamic_ratio)  # 0.3 * 7 = 2 dims
-                    
-                    # MSE loss only on the first n_dynamic_dims (remaining dims assumed static)
-                    z_projected_dynamic = z_projected[:, :, :n_dynamic_dims]  # (b, num_hist, n_dynamic_dims)
-                    z_7d_target_dynamic = z_7d_target[:, :, :n_dynamic_dims]  # (b, num_hist, n_dynamic_dims)
-                    
-                    dynamics_7d_loss = torch.mean((z_projected_dynamic - z_7d_target_dynamic)**2)
-                    loss = loss + self.dynamics_7d_loss_weight * dynamics_7d_loss
-                    loss_components["dynamics_7d_loss"] = dynamics_7d_loss
-                    loss_components["n_dynamic_dims"] = n_dynamic_dims
+                    # Predict t from t-1 using all z_dim dimensions (e.g., 12D → 12D)
+                    dynamics_loss = torch.mean((z_pred_avg - z_src_avg)**2)
+                    loss = loss + self.dynamics_7d_loss_weight * dynamics_loss
+                    loss_components["dynamics_7d_loss"] = dynamics_loss
+
             
             # DINO feature reconstruction loss (384D -> 128D -> 384D)
             if hasattr(self.encoder, 'recon_dino_loss') and self.encoder.recon_dino_loss:

@@ -34,38 +34,119 @@ The DINO world model employs a **pretrained DINO encoder** as a fixed feature ex
 
 - **robomimic**
 
-#### Environment Setting:
-cd /home/minghao/workspace/dino_wm
+## 🚀 Server Migration Setup Guide
+
+### Environment Setup (One-Step)
+```bash
+# 1. Create conda environment from environment.yml
+conda env create -f environment.yml
 conda activate wm310
 
+# 2. Install additional packages
+pip install accelerate hydra-submitit-launcher
+
+# 3. Verify PyTorch CUDA
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}, GPUs: {torch.cuda.device_count()}')"
+```
+
+### Dataset Setup & Conversion Scripts
+```bash
+# Check GPU usage before training
+nvidia-smi
+
+# Convert robomimic dataset (if needed)
+python convert_robomimic_to_dino_wm.py --input /path/to/hdf5 --output /path/to/ph_converted_final
+
+# Verify dataset structure
+ls /path/to/ph_converted_final/  # Should contain: states.pth, actions.pth, velocities.pth, episode_*.mp4
+```
+
+### Training Commands Used
+
+#### Debug Training (Recommended first step)
+```bash
+# Auto-select lowest GPU and debug train
+python train_robomimic_align_recon.py --config-name=train_robomimic_align_with_dynamic_ratio training.epochs=1 debug=true
+
+# Manual GPU selection for debug
+CUDA_VISIBLE_DEVICES=5 python train_robomimic_align_recon.py --config-name=train_robomimic_align_with_dynamic_ratio training.epochs=1 debug=true
+```
+
+#### Full Training
+```bash
+# Auto GPU selection (recommended)
+python train_robomimic_align_recon.py --config-name=train_robomimic_align_with_dynamic_ratio
+
+# Specific GPU
+CUDA_VISIBLE_DEVICES=5 python train_robomimic_align_recon.py --config-name=train_robomimic_align_with_dynamic_ratio
+
+# Multi-GPU distributed (if needed)
+CUDA_VISIBLE_DEVICES=5,6 accelerate launch --num_processes=2 --gpu_ids=0,1 train_robomimic_align_recon.py --config-name=train_robomimic_align_with_dynamic_ratio
+```
+
+#### Monitoring & Utilities
+```bash
+# Monitor GPU usage during training
+watch -n 1 nvidia-smi
+
+# Check training logs
+tail -f outputs/*/logs/train.log
+
+# WandB dashboard
+# https://wandb.ai/causality_/dino_wm_debug/
+```
+
+#### Environment Setting:
+```bash
+cd /home/minghao/workspace/dino_wm
+conda activate wm310
+```
+
 ---
 
-#### 🔹 Training Procedure
+### Key Files & Configuration
 
-1. **Latent Projection**  
-   Add a projection layer on top of the frozen DINO embedding to map it to a 128-dimensional estimated latent space.
+#### 🔹 Main Training Script
+**File**: `train_robomimic_align_recon.py`
+- Includes auto GPU selection via `gpu_utils/gpu_utils.py`
+- WandB tracking with experiment naming
+- Supports debug mode and distributed training
 
-2. **Alignment with True State Variables**  
-   Incorporate an alignment loss to ensure that part of the estimated latent space corresponds to the true state variables.
+#### 🔹 Configuration Files
+**Main Config**: `conf/train_robomimic_align_with_dynamic_ratio.yaml`
+```yaml
+# Key settings for server migration - update paths as needed
+encoder:
+  z_dim: 12  # 12D z-space architecture
+  recon_dino_loss: true
+alignment:
+  dynamics_7d_loss_weight: 1.0  # Full 12D dynamics
+num_gpus: 1  # Auto GPU selection
+min_free_memory_gb: 2.0
+```
 
-   **Alignment Strategies:**
-   - **Option 1:** Linear alignment using **InfoNCE** loss.
-   - **Option 2:** Reconstruct the true state variables directly from the aligned part of the estimated latent space.
+**Environment Config**: `conf/env/robomimic_can.yaml` 
+```yaml
+# UPDATE THIS PATH for new server
+dataset_path: "/tmp/minghao/can/ph_converted_final"  
+```
 
-3. **DINO Reconstruction (NEW)**
-   Optional decoder from 128D projected features back to 384D original DINO features with MSE loss.
-   
-4. **Downstream Evaluation**  
-   Evaluate the model's planning performance using the trained checkpoint to assess how well the latent space captures useful dynamics.
+#### 🔹 Model Architecture Files
+- `models/dino.py`: 12D MLP encoder (384D→12D) + reconstruction decoder
+- `models/visual_world_model.py`: InfoNCE alignment + temporal dynamics
+- `gpu_utils/gpu_utils.py`: Auto GPU selection utility
+
+#### 🔹 Architecture Summary
+**Current Implementation (12D InfoNCE)**:
+1. **MLP Encoder**: 384D DINO → 12D z-space  
+2. **InfoNCE Alignment**: First 7D of z-space → 7D state alignment
+3. **Temporal Dynamics**: Full 12D t-1 → t prediction (dynamic_ratio = 1.0)
+4. **Reconstruction**: 12D z → 384D DINO features
 
 ---
 
-# important-instruction-reminders
-Do what has been asked; nothing more, nothing less.
-NEVER create files unless they're absolutely necessary for achieving your goal.
-ALWAYS prefer editing an existing file to creating a new one.
-NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
-
-**Everytime you train model, please first run it one epoch to debug whether it can run well, if successful, then train it in background**
-**For each training, please train 2 experiments: one with alignment loss, one with alignment+reconstruction loss. Name them with different suffixes in wandb.**
-**Everytime you train model, please automatically select GPUs with lowest occupation using available scripts**
+# Training Instructions
+- **Always debug first**: Run 1 epoch before full training
+- **Auto GPU selection**: Script automatically chooses lowest occupied GPUs  
+- **Path updates**: Update `conf/env/robomimic_can.yaml` dataset path for new server
+- **WandB tracking**: Experiments logged with different suffixes
