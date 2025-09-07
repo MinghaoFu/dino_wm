@@ -128,7 +128,7 @@ min_free_memory_gb: 2.0
 **Environment Config**: `conf/env/robomimic_can.yaml` 
 ```yaml
 # UPDATE THIS PATH for new server
-dataset_path: "/tmp/minghao/can/ph_converted_final"  
+dataset_path: "/home/fuminghao/data/can/ph_converted_final"  
 ```
 
 #### 🔹 Model Architecture Files

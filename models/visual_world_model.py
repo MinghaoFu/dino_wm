@@ -314,7 +314,7 @@ class VWorldModel(nn.Module):
                     z_tgt[:, :, :, :-self.action_dim].detach()
                 )
 
-            loss = loss + z_loss
+            loss = loss #+ z_loss
             loss_components["z_loss"] = z_loss
             loss_components["z_visual_loss"] = z_visual_loss
             loss_components["z_proprio_loss"] = z_proprio_loss
@@ -402,28 +402,6 @@ class VWorldModel(nn.Module):
                     loss = loss + self.dino_recon_loss_weight * dino_recon_loss
                     loss_components["dino_recon_loss"] = dino_recon_loss
             
-            # Conditional Flow KL divergence loss
-            if self.flow_kl_loss_enabled and state is not None:
-                # Extract DINO visual features from z_pred for KL loss
-                # z_pred shape: (batch_size, num_hist, num_patches, emb_dim)
-                if self.concat_dim == 0:
-                    # Visual features are in all patches except last two (proprio, action)
-                    z_visual = z_pred[:, :, :-2, :]  # (batch_size, num_hist, num_patches-2, emb_dim)
-                elif self.concat_dim == 1:
-                    # Visual features are in the first part of embedding dimension
-                    visual_dim = self.encoder.emb_dim  # 128 for DINO
-                    z_visual = z_pred[:, :, :, :visual_dim]  # (batch_size, num_hist, num_patches, 128)
-                
-                # Average over patches to get per-frame visual features
-                z_visual_avg = z_visual.mean(dim=2)  # (batch_size, num_hist, visual_dim)
-                
-                # Take state for the predicted frames (matching z_pred temporal dimension)
-                state_pred_frames = state[:, self.num_pred:, :]  # (batch_size, num_hist, state_dim)
-                
-                # Compute conditional flow KL loss
-                flow_kl_loss = self.flow_kl_loss(z_visual_avg, state_pred_frames)
-                loss = loss + self.flow_kl_loss_weight * flow_kl_loss
-                loss_components["flow_kl_loss"] = flow_kl_loss
         else:
             visual_pred = None
             z_pred = None

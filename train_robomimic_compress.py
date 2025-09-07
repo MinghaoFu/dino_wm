@@ -99,7 +99,7 @@ class Trainer:
             wandb_dict = OmegaConf.to_container(cfg, resolve=True)
             if self.cfg.debug:
                 log.info("WARNING: Running in debug mode...")
-                self.wandb_run = wandb.init(
+                self.wandb_run = wandb.init( 
                     project="dino_wm_debug",
                     config=wandb_dict,
                     id=wandb_run_id,
@@ -107,7 +107,7 @@ class Trainer:
                 )
             else:
                 self.wandb_run = wandb.init(
-                    project="dino_wm_align_recon",  # Different project name for alignment+recon
+                    project="dino_wm_align_recon",  # 
                     config=wandb_dict,
                     id=wandb_run_id,
                     resume="allow",
