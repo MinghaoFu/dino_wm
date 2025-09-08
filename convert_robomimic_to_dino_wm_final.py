@@ -8,6 +8,13 @@ import cv2
 from pathlib import Path
 import os
 from tqdm import tqdm
+import argparse
+
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description='Convert robomimic dataset to DINO_WM format')
+parser.add_argument('--source_dir', type=str, required=True, help='Source directory of the robomimic dataset')
+parser.add_argument('--save_data_dir', type=str, required=True, help='Directory to save the converted data')
+args = parser.parse_args()
 
 def convert_robomimic_to_dino_wm_final(
     source_dir="/mnt/data1/minghao/robomimic/can/ph",
@@ -32,7 +39,8 @@ def convert_robomimic_to_dino_wm_final(
     print("Loading source data...")
     demo_file = h5py.File(f"{source_dir}/demo_v15.hdf5", 'r')
     low_dim_file = h5py.File(f"{source_dir}/low_dim_v15.hdf5", 'r')
-    image_file = h5py.File(f"{source_dir}/image.hdf5", 'r')
+    # Update the image file name to 'image_384_v15.hdf5'
+    image_file = h5py.File(f"{source_dir}/image_384_v15.hdf5", 'r')
     
     # 获取demo keys
     demo_keys = [key for key in demo_file['data'].keys() if key.startswith('demo_')]
@@ -111,18 +119,24 @@ def convert_robomimic_to_dino_wm_final(
         image_obs = image_data['obs']
         images = image_obs['agentview_image'][:]
         
-        # 创建视频写入器
-        video_path = target_path / "obses" / f"episode_{i:05d}.mp4"
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(str(video_path), fourcc, 30.0, (224, 224))
-        
-        for frame_idx in range(seq_len):
-            # 从RGB转换为BGR用于OpenCV
-            frame = images[frame_idx]
-            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-            out.write(frame_bgr)
-        
-        out.release()
+        # Ensure correct initialization of the video writer and add error handling
+        video_writer = None
+        try:
+            # Initialize video writer with appropriate settings
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            video_writer = cv2.VideoWriter(str(target_path / f"video_{i}.mp4"), fourcc, 30.0, (224, 224))
+
+            # Write frames to video
+            for frame_idx in range(seq_len):
+                # 从RGB转换为BGR用于OpenCV
+                frame = images[frame_idx]
+                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                video_writer.write(frame_bgr)
+        except Exception as e:
+            print(f"Error writing video for demo {demo_key}: {e}")
+        finally:
+            if video_writer is not None:
+                video_writer.release()
     
     # 保存张量
     print("Saving tensors...")
@@ -174,7 +188,18 @@ def convert_robomimic_to_dino_wm_final(
     print(f"✅ No tokens.pth: Correct (dino_wm uses DINO)")
     print(f"❌ Episodes: Different scale (200 vs 18685) - Expected")
     
-    return target_path
+    return target_path 
 
+# Ensure the function call is correctly placed after the function definition
 if __name__ == "__main__":
-    convert_robomimic_to_dino_wm_final() 
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Convert robomimic dataset to DINO_WM format')
+    parser.add_argument('--source_dir', type=str, required=True, help='Source directory of the robomimic dataset')
+    parser.add_argument('--save_data_dir', type=str, required=True, help='Directory to save the converted data')
+    args = parser.parse_args()
+
+    # Use command-line arguments for source and target directories
+    convert_robomimic_to_dino_wm_final(
+        source_dir=args.source_dir,
+        target_dir=args.save_data_dir
+    ) 
