@@ -55,9 +55,26 @@ def create_objective_fn(alpha, base, mode="last"):
         loss = loss_visual + alpha * loss_proprio
         return loss
 
+    def objective_fn_projected_last(z_obs_pred, z_obs_tgt):
+        """
+        Objective function for projected latent representation.
+        Only uses visual features (which contain mixed 64D projected features).
+        Args:
+            z_obs_pred: dict, {'visual': (B, T, *D_mixed)}
+            z_obs_tgt: dict, {'visual': (B, T, *D_mixed)}
+        Returns:
+            loss: tensor (B, )
+        """
+        loss_visual = metric(z_obs_pred["visual"][:, -1:], z_obs_tgt["visual"]).mean(
+            dim=tuple(range(1, z_obs_pred["visual"].ndim))
+        )
+        return loss_visual
+
     if mode == "last":
         return objective_fn_last
     elif mode == "all":
         return objective_fn_all
+    elif mode == "projected_last":
+        return objective_fn_projected_last
     else:
         raise NotImplementedError

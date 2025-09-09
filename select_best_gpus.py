@@ -1,73 +1,144 @@
 #!/usr/bin/env python3
 """
-Script to automatically select the 4 GPUs with the lowest memory occupation
+Enhanced GPU selection script using nvitop for both memory and utilization metrics
 """
-import subprocess
-import re
+import sys
+import argparse
+from typing import List, Tuple
 
-def get_gpu_memory_usage():
-    """Get memory usage for all GPUs"""
+try:
+    from nvitop import Device
+    NVITOP_AVAILABLE = True
+except ImportError:
+    NVITOP_AVAILABLE = False
+    print("Warning: nvitop not available, falling back to nvidia-ml-py", file=sys.stderr)
     try:
-        result = subprocess.run(['nvidia-smi', '--query-gpu=index,memory.used', '--format=csv,nounits,noheader'], 
-                              capture_output=True, text=True, check=True)
-        
-        gpu_info = []
-        for line in result.stdout.strip().split('\n'):
-            if line:
-                parts = line.split(', ')
-                gpu_id = int(parts[0])
-                memory_used = int(parts[1])
-                gpu_info.append((gpu_id, memory_used))
-        
-        return gpu_info
-    except subprocess.CalledProcessError as e:
-        print(f"Error running nvidia-smi: {e}")
-        return []
+        import pynvml
+        PYNVML_AVAILABLE = True
+    except ImportError:
+        PYNVML_AVAILABLE = False
+        print("Error: Neither nvitop nor pynvml available", file=sys.stderr)
+        sys.exit(1)
 
-def select_best_gpus(num_gpus=4):
-    """Select the num_gpus GPUs with lowest memory usage"""
-    gpu_info = get_gpu_memory_usage()
-    if not gpu_info:
+def get_gpu_metrics_nvitop() -> List[Tuple[int, float, float, int]]:
+    """Get GPU metrics using nvitop: (gpu_id, memory_percent, gpu_util_percent, memory_used_mb)"""
+    devices = Device.all()
+    gpu_metrics = []
+    
+    for device in devices:
+        gpu_id = device.cuda_index
+        memory_used = device.memory_used_human()
+        memory_total = device.memory_total_human()
+        memory_percent = device.memory_percent()
+        gpu_util = device.gpu_utilization()
+        
+        # Convert memory to MB for compatibility
+        memory_used_mb = int(device.memory_used() / 1024 / 1024) if device.memory_used() else 0
+        
+        gpu_metrics.append((gpu_id, memory_percent, gpu_util, memory_used_mb))
+    
+    return gpu_metrics
+
+def get_gpu_metrics_fallback() -> List[Tuple[int, float, float, int]]:
+    """Fallback GPU metrics using pynvml"""
+    if not PYNVML_AVAILABLE:
         return []
     
-    # Sort by memory usage (ascending)
-    sorted_gpus = sorted(gpu_info, key=lambda x: x[1])
+    pynvml.nvmlInit()
+    device_count = pynvml.nvmlDeviceGetCount()
+    gpu_metrics = []
     
-    # Select the first num_gpus
+    for i in range(device_count):
+        handle = pynvml.nvmlDeviceGetHandleByIndex(i)
+        
+        # Memory info
+        mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+        memory_used_mb = mem_info.used // 1024 // 1024
+        memory_percent = (mem_info.used / mem_info.total) * 100
+        
+        # GPU utilization
+        try:
+            util = pynvml.nvmlDeviceGetUtilizationRates(handle)
+            gpu_util = util.gpu
+        except:
+            gpu_util = 0  # fallback if utilization not available
+        
+        gpu_metrics.append((i, memory_percent, gpu_util, memory_used_mb))
+    
+    return gpu_metrics
+
+def calculate_gpu_score(memory_percent: float, gpu_util: float, memory_weight: float = 0.7, util_weight: float = 0.3) -> float:
+    """Calculate GPU suitability score (lower is better)"""
+    return (memory_percent * memory_weight) + (gpu_util * util_weight)
+
+def select_best_gpus(num_gpus: int = 4, memory_weight: float = 0.7, util_weight: float = 0.3) -> List[str]:
+    """Select the best GPUs based on memory and utilization"""
+    
+    # Try nvitop first, fallback to pynvml
+    if NVITOP_AVAILABLE:
+        gpu_metrics = get_gpu_metrics_nvitop()
+    else:
+        gpu_metrics = get_gpu_metrics_fallback()
+    
+    if not gpu_metrics:
+        print("Error: Could not retrieve GPU metrics", file=sys.stderr)
+        return ["0", "1", "2", "3"][:num_gpus]  # fallback
+    
+    # Calculate scores and sort
+    gpu_scores = []
+    for gpu_id, memory_percent, gpu_util, memory_used_mb in gpu_metrics:
+        score = calculate_gpu_score(memory_percent, gpu_util, memory_weight, util_weight)
+        gpu_scores.append((gpu_id, score, memory_percent, gpu_util, memory_used_mb))
+    
+    # Sort by score (lower is better)
+    sorted_gpus = sorted(gpu_scores, key=lambda x: x[1])
+    
+    # Display information
+    print("GPU Utilization & Memory Status:")
+    print(f"{'GPU':<3} {'Mem%':<6} {'Util%':<6} {'MemMB':<8} {'Score':<6}")
+    print("-" * 35)
+    for gpu_id, score, mem_pct, gpu_util, mem_mb in sorted_gpus:
+        indicator = "🟢" if score < 20 else "🟡" if score < 50 else "🔴"
+        print(f"{gpu_id:<3} {mem_pct:<6.1f} {gpu_util:<6.1f} {mem_mb:<8} {score:<6.1f} {indicator}")
+    
+    # Select best GPUs
     best_gpus = [str(gpu[0]) for gpu in sorted_gpus[:num_gpus]]
+    print(f"Selected {num_gpus} best GPUs: {best_gpus}")
     
-    print(f"GPU memory usage:")
-    for gpu_id, memory in sorted_gpus:
-        print(f"  GPU {gpu_id}: {memory} MiB")
-    
-    print(f"Selected GPUs with lowest usage: {best_gpus}")
     return best_gpus
 
-def select_single_best_gpu():
-    """Select the single GPU with lowest memory usage"""
-    gpu_info = get_gpu_memory_usage()
-    if not gpu_info:
-        return "0"  # fallback
-    
-    # Sort by memory usage (ascending)
-    sorted_gpus = sorted(gpu_info, key=lambda x: x[1])
-    
-    best_gpu = str(sorted_gpus[0][0])
-    print(f"GPU memory usage:")
-    for gpu_id, memory in sorted_gpus:
-        print(f"  GPU {gpu_id}: {memory} MiB")
-    
-    print(f"Selected GPU with lowest usage: {best_gpu}")
-    return best_gpu
+def select_single_best_gpu(memory_weight: float = 0.7, util_weight: float = 0.3) -> str:
+    """Select the single best GPU"""
+    best_gpus = select_best_gpus(num_gpus=1, memory_weight=memory_weight, util_weight=util_weight)
+    return best_gpus[0] if best_gpus else "0"
 
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) > 1 and sys.argv[1] == "single":
-        gpu = select_single_best_gpu()
-        print(gpu)
+def main():
+    parser = argparse.ArgumentParser(description="Select best GPUs based on memory and utilization")
+    parser.add_argument("mode", nargs="?", choices=["single", "multi"], default="multi",
+                       help="Selection mode: single GPU or multiple GPUs (default: multi)")
+    parser.add_argument("--num-gpus", type=int, default=4, 
+                       help="Number of GPUs to select in multi mode (default: 4)")
+    parser.add_argument("--memory-weight", type=float, default=0.7,
+                       help="Weight for memory usage in selection (default: 0.7)")
+    parser.add_argument("--util-weight", type=float, default=0.3,
+                       help="Weight for GPU utilization in selection (default: 0.3)")
+    parser.add_argument("--quiet", "-q", action="store_true",
+                       help="Only output the selected GPU IDs")
+    
+    args = parser.parse_args()
+    
+    if args.mode == "single":
+        gpu = select_single_best_gpu(args.memory_weight, args.util_weight)
+        if args.quiet:
+            print(gpu)
+        else:
+            print(f"Selected GPU: {gpu}")
     else:
-        gpus = select_best_gpus(4)
-        if gpus:
+        gpus = select_best_gpus(args.num_gpus, args.memory_weight, args.util_weight) 
+        if args.quiet:
             print(",".join(gpus))
         else:
-            print("0,1,2,3")  # fallback
+            print(f"Selected GPUs: {','.join(gpus)}")
+
+if __name__ == "__main__":
+    main()

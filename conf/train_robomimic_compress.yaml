@@ -7,14 +7,12 @@ defaults:
   - decoder: vqvae
   - predictor: vit
 
-# Override encoder to enable DINO reconstruction loss
+# DINO encoder configuration
 encoder:
   _target_: models.dino.DinoV2Encoder
   name: "dinov2_vits14"
   feature_key: "x_norm_patchtokens"
   projected_dim: 128
-  z_dim: 12  # Configurable z dimension for MLP encoder
-  recon_dino_loss: true
 
 # Base path for local execution
 ckpt_base_path: ./outputs
@@ -29,7 +27,7 @@ training:
   seed: 0
   epochs: 100  # Full training
   batch_size: 32  # Single GPU batch size
-  save_every_x_epoch: 5
+  save_every_x_epoch: 1
   reconstruct_every_x_batch: 500
   num_reconstruct_samples: 2
   encoder_lr: 1e-6
@@ -54,29 +52,35 @@ num_proprio_repeat: 1
 num_hist: 3
 num_pred: 1 # only supports 1
 has_predictor: True # set this to False for only training a decoder
-has_decoder: True # set this to False for only training a predictor
+has_decoder: True # Keep decoder - uses original 384D DINO features like original DINO-WM
+
+# Projection dimensions - computed dynamically
+# projection_input_dim = encoder.emb_dim + proprio_emb_dim (visual + proprio, excludes action)
+# projected_dim = target compressed dimension for visual+proprio
+# predictor_dim = projected_dim + action_emb_dim (total predictor input)
+projected_dim: 64  # Target compressed dimension for visual+proprio
+alignment_dim: 7   # Number of dimensions to use for InfoNCE alignment with state (should match actual state dimension for robomimic)
+# predictor_dim will be computed dynamically as: projected_dim + action_emb_dim
 
 model:
   _target_: models.visual_world_model.VWorldModel
   image_size: ${img_size}
   num_hist: ${num_hist}
   num_pred: ${num_pred}
-  train_encoder: False
+  train_encoder: True
+  alignment_dim: ${alignment_dim}
   train_predictor: True
   train_decoder: True
+  projected_dim: ${projected_dim}
 
 # Alignment settings with new architecture: 12D z-space, InfoNCE alignment, full dynamics
 alignment:
   state_consistency_loss_weight: 1.0
   alignment_regularization: 0.01
-  dynamics_7d_loss_weight: 1.0  # Enable full 12D dynamics prediction (t-1 → t)
-  # dynamic_ratio removed - now using full 12D dynamics instead of partial
-  # alignment_feature_selection removed - now using first 7D of z_dim directly
+  latent_dynamics_loss_weight: 1.0  # Full 64D latent dynamics prediction (t-1 → t)
+  # Note: We predict dynamics in the full 64D mixed latent space after projection
 
-# DINO reconstruction: 12D z → 384D DINO features  
-dino_reconstruction:
-  enabled: true
-  loss_weight: 1.0  # Reconstruction loss weight for 12D → 384D pathway
+# DINO reconstruction is not used - removed
 
 debug: False 
 
@@ -95,5 +99,5 @@ plan_settings:
 
 # WandB settings
 wandb:
-  project: dino_wm_12d_infonce_alignment
-  name: "12d_z_infonce_alignment_zdim${encoder.z_dim}"
+  project: dino_wm_projected_latent
+  name: "projected_latent_64d_alignment"

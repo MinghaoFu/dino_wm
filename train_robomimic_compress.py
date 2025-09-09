@@ -62,7 +62,15 @@ class Trainer:
                 raise
             torch.distributed.barrier()
 
-        self.accelerator = Accelerator(log_with="wandb")
+        # Check CUDA availability after environment variable is set
+        if torch.cuda.is_available():
+            log.info(f"CUDA is available. GPU count: {torch.cuda.device_count()}")
+            # Force using the first available GPU (which is GPU 0 after CUDA_VISIBLE_DEVICES is set)
+            self.accelerator = Accelerator(log_with="wandb", device_placement=True)
+        else:
+            log.warning("CUDA is not available! Running on CPU.")
+            self.accelerator = Accelerator(log_with="wandb", cpu=True)
+        
         log.info(
             f"rank: {self.accelerator.local_process_index}  model_name: {model_name}"
         )
@@ -231,6 +239,8 @@ class Trainer:
             in_chans=self.datasets["train"].proprio_dim,
             emb_dim=self.cfg.proprio_emb_dim,
         )
+        # Get emb_dim BEFORE wrapping with accelerate - avoid DDP attribute access issues  
+        encoder_emb_dim = self.encoder.emb_dim
         proprio_emb_dim = self.proprio_encoder.emb_dim
         print(f"Proprio encoder type: {type(self.proprio_encoder)}")
         self.proprio_encoder = self.accelerator.prepare(self.proprio_encoder)
@@ -240,6 +250,7 @@ class Trainer:
             in_chans=self.datasets["train"].action_dim,
             emb_dim=self.cfg.action_emb_dim,
         )
+        # Get emb_dim BEFORE wrapping with accelerate - avoid DDP attribute access issues
         action_emb_dim = self.action_encoder.emb_dim
         print(f"Action encoder type: {type(self.action_encoder)}")
 
@@ -266,12 +277,7 @@ class Trainer:
                     self.cfg.predictor,
                     num_patches=num_patches,
                     num_frames=self.cfg.num_hist,
-                    dim=self.encoder.emb_dim
-                    + (
-                        proprio_emb_dim * self.cfg.num_proprio_repeat
-                        + action_emb_dim * self.cfg.num_action_repeat
-                    )
-                    * (self.cfg.concat_dim),
+                    dim=self.cfg.projected_dim + action_emb_dim,  # Compute dynamically: projected_dim + action_emb_dim
                 )
             if not self.train_predictor:
                 for param in self.predictor.parameters():
@@ -291,19 +297,17 @@ class Trainer:
                         self.decoder = torch.load(decoder_path, weights_only=False)
                     log.info(f"Loaded decoder from {decoder_path}")
                 else:
+                    # Following original DINO WM: decoder accepts full features (projected + action)
+                    decoder_input_dim = self.cfg.projected_dim + action_emb_dim  # 64D projected + 16D action = 80D
                     self.decoder = hydra.utils.instantiate(
                         self.cfg.decoder,
-                        emb_dim=self.encoder.emb_dim,  # 384
+                        emb_dim=decoder_input_dim,  # 80D (full features like original DINO WM)
                     )
             if not self.train_decoder:
                 for param in self.decoder.parameters():
                     param.requires_grad = False
                     
-        self.encoder, self.predictor, self.decoder = self.accelerator.prepare(
-            self.encoder, self.predictor, self.decoder
-        )
-        
-        # Create the model WITH alignment features
+        # Create the model BEFORE wrapping with accelerator to avoid DDP attribute access issues
         self.model = hydra.utils.instantiate(
             self.cfg.model,
             encoder=self.encoder,
@@ -318,16 +322,23 @@ class Trainer:
             num_proprio_repeat=self.cfg.num_proprio_repeat,
         )
         
+        self.encoder, self.predictor, self.decoder = self.accelerator.prepare(
+            self.encoder, self.predictor, self.decoder
+        )
+        
         # Set alignment hyperparameters if provided
         if hasattr(self.cfg, 'alignment'):
             if hasattr(self.cfg.alignment, 'state_consistency_loss_weight'):
                 self.model.state_consistency_loss_weight = self.cfg.alignment.state_consistency_loss_weight
             if hasattr(self.cfg.alignment, 'alignment_regularization'):
                 self.model.alignment_regularization = self.cfg.alignment.alignment_regularization
-            if hasattr(self.cfg.alignment, 'dynamics_7d_loss_weight'):
-                self.model.dynamics_7d_loss_weight = self.cfg.alignment.dynamics_7d_loss_weight
+            # Set latent dynamics loss weight (for full 64D latent space dynamics)
+            if hasattr(self.cfg.alignment, 'latent_dynamics_loss_weight'):
+                self.model.latent_dynamics_loss_weight = self.cfg.alignment.latent_dynamics_loss_weight
+            elif hasattr(self.cfg.alignment, 'dynamics_7d_loss_weight'):  # Backward compatibility
+                self.model.latent_dynamics_loss_weight = self.cfg.alignment.dynamics_7d_loss_weight
             else:
-                self.model.dynamics_7d_loss_weight = 0.0  # Default: disabled
+                self.model.latent_dynamics_loss_weight = 0.0  # Default: disabled
             
             # Dynamic ratio parameter
             if hasattr(self.cfg.alignment, 'dynamic_ratio'):
@@ -340,6 +351,11 @@ class Trainer:
                 self.model.alignment_feature_selection = self.cfg.alignment.alignment_feature_selection
             else:
                 self.model.alignment_feature_selection = 'isolate'  # Default: isolate first 64 dims
+        
+        # Note: Model is NOT prepared with accelerator - only individual components are prepared
+        # This allows custom methods like encode(), rollout(), decode_obs() to work directly
+        # However, we still need to move the model to the correct device
+        self.model = self.model.to(self.accelerator.device)
 
     def init_optimizers(self):
         self.encoder_optimizer = torch.optim.Adam(
@@ -406,6 +422,15 @@ class Trainer:
             self.monitor_thread.start()
 
         init_epoch = self.epoch + 1  # epoch starts from 1
+        
+        # Run initial evaluation before training (epoch 0)
+        if init_epoch == 1:  # Only run initial eval if starting from scratch
+            self.epoch = 0
+            log.info("Running initial evaluation before training...")
+            self.accelerator.wait_for_everyone()
+            self.val()
+            self.logs_flash(step=self.epoch)
+        
         for epoch in range(init_epoch, init_epoch + self.total_epochs):
             self.epoch = epoch
             self.accelerator.wait_for_everyone()
@@ -516,9 +541,14 @@ class Trainer:
             if self.cfg.has_decoder and plot:
                 # only eval images when plotting due to speed
                 if self.cfg.has_predictor:
-                    z_obs_out, z_act_out = self.model.separate_emb(z_out)
-                    z_gt = self.model.encode_obs(obs)
-                    z_tgt = slice_trajdict_with_t(z_gt, start_idx=self.model.num_pred)
+                    # Use projected features like in forward pass
+                    z_gt, _ = self.model.encode(obs, act)  # Returns (64D projected features, z_dct)
+                    z_tgt_tensor = z_gt[:, self.model.num_pred :, :, :]  # (b, num_hist, num_patches, 64)
+                    
+                    # Create dummy dictionary format for evaluation compatibility
+                    # Since we can't separate 64D projected features, treat as unified "visual"
+                    z_obs_out = {"visual": z_out}  # z_out is 64D projected features
+                    z_tgt = {"visual": z_tgt_tensor}  # z_tgt is 64D projected features
 
                     state_tgt = state[:, -self.model.num_hist :]  # (b, num_hist, dim)
                     err_logs = self.err_eval(z_obs_out, z_tgt)
@@ -620,9 +650,14 @@ class Trainer:
             if self.cfg.has_decoder and plot:
                 # only eval images when plotting due to speed
                 if self.cfg.has_predictor:
-                    z_obs_out, z_act_out = self.model.separate_emb(z_out)
-                    z_gt = self.model.encode_obs(obs)
-                    z_tgt = slice_trajdict_with_t(z_gt, start_idx=self.model.num_pred)
+                    # Use projected features like in forward pass
+                    z_gt, _ = self.model.encode(obs, act)  # Returns (64D projected features, z_dct)
+                    z_tgt_tensor = z_gt[:, self.model.num_pred :, :, :]  # (b, num_hist, num_patches, 64)
+                    
+                    # Create dummy dictionary format for evaluation compatibility
+                    # Since we can't separate 64D projected features, treat as unified "visual"
+                    z_obs_out = {"visual": z_out}  # z_out is 64D projected features
+                    z_tgt = {"visual": z_tgt_tensor}  # z_tgt is 64D projected features
 
                     state_tgt = state[:, -self.model.num_hist :]  # (b, num_hist, dim)
                     err_logs = self.err_eval(z_obs_out, z_tgt)
@@ -735,7 +770,10 @@ class Trainer:
             obs_g = {}
             for k in obs.keys():
                 obs_g[k] = obs[k][-1].unsqueeze(0).unsqueeze(0).to(self.device)
-            z_g = self.model.encode_obs(obs_g)
+            act_g = act[-1].unsqueeze(0).unsqueeze(0).to(self.device)  # Last action, same shape as obs_g
+            # Use projected features like in forward pass
+            z_g_tensor, _ = self.model.encode(obs_g, act_g)  # Returns (64D projected features, z_dct)
+            z_g = {"visual": z_g_tensor}  # Create dummy dictionary format for evaluation compatibility
             actions = act.unsqueeze(0)
 
             for past in num_past:
@@ -748,8 +786,9 @@ class Trainer:
                     )  # unsqueeze for batch, (b, t, c, h, w)
 
                 z_obses, z = self.model.rollout(obs_0, actions)
-                z_obs_last = slice_trajdict_with_t(z_obses, start_idx=-1, end_idx=None)
-                div_loss = self.err_eval_single(z_obs_last, z_g)
+                # z contains full 64D projected features, extract last timestep
+                z_last = slice_trajdict_with_t({"visual": z}, start_idx=-1, end_idx=None)
+                div_loss = self.err_eval_single(z_last, z_g)
 
                 for k in div_loss.keys():
                     log_key = f"z_{k}_err_rollout{postfix}"
@@ -763,6 +802,7 @@ class Trainer:
                         ]
 
                 if self.cfg.has_decoder:
+                    # z_obses now contains full 64D features in a dict format
                     visuals = self.model.decode_obs(z_obses)[0]["visual"]
                     imgs = torch.cat([obs["visual"], visuals[0].cpu()], dim=0)
                     self.plot_imgs(
@@ -876,8 +916,12 @@ class Trainer:
 
 @hydra.main(config_path="conf", config_name="train_robomimic_align_recon")
 def main(cfg: OmegaConf):
-    # Auto-select GPUs with lowest memory usage
-    selected_gpus = auto_select_gpus(getattr(cfg, 'num_gpus', 1), getattr(cfg, 'min_free_memory_gb', 2.0))
+    # Only auto-select GPUs if CUDA_VISIBLE_DEVICES is not already set
+    if 'CUDA_VISIBLE_DEVICES' not in os.environ:
+        # Auto-select GPUs with lowest memory usage
+        selected_gpus = auto_select_gpus(getattr(cfg, 'num_gpus', 1), getattr(cfg, 'min_free_memory_gb', 2.0))
+    else:
+        log.info(f"Using pre-configured CUDA_VISIBLE_DEVICES: {os.environ['CUDA_VISIBLE_DEVICES']}")
     
     trainer = Trainer(cfg)
     trainer.run()

@@ -2,6 +2,7 @@ import torch
 import hydra
 import copy
 import numpy as np
+from tqdm import tqdm
 from einops import rearrange, repeat
 from utils import slice_trajdict_with_t
 from .base_planner import BasePlanner
@@ -82,6 +83,9 @@ class MPCPlanner(BasePlanner):
 
         cur_obs_0 = obs_0
         memo_actions = None
+        # Progress bar for MPC iterations
+        pbar_mpc = tqdm(total=self.max_iter if self.max_iter else 100, desc="🎯 MPC Planning", leave=False)
+        
         while not np.all(self.is_success) and self.iter < self.max_iter:
             self.sub_planner.logging_prefix = f"plan_{self.iter}"
             actions, _ = self.sub_planner.plan(
@@ -93,6 +97,11 @@ class MPCPlanner(BasePlanner):
             self._apply_success_mask(taken_actions)
             memo_actions = actions.detach()[:, self.n_taken_actions :]
             self.planned_actions.append(taken_actions)
+            
+            # Update progress bar
+            success_rate = np.mean(self.is_success)
+            pbar_mpc.set_postfix({"Iter": self.iter, "Success": f"{success_rate:.1%}"})
+            pbar_mpc.update(1)
 
             print(f"MPC iter {self.iter} Eval ------- ")
             action_so_far = torch.cat(self.planned_actions, dim=1)
@@ -131,6 +140,9 @@ class MPCPlanner(BasePlanner):
             self.iter += 1
             self.sub_planner.logging_prefix = f"plan_{self.iter}"
 
+        # Close progress bar
+        pbar_mpc.close()
+        
         planned_actions = torch.cat(self.planned_actions, dim=1)
         self.evaluator.assign_init_cond(
             obs_0=init_obs_0,
