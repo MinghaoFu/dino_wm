@@ -1,489 +1,483 @@
+# DINO World Model - Complete Setup Guide
 
-### New Server Setup Instructions
+This document contains the complete setup instructions for DINO World Model training with robomimic datasets. All configurations and fixes from Sep 10, 2025 are integrated.
 
-#### Environment Setup
-- **Create and Activate Conda Environment**:
-  ```bash
-  conda create -n wm310 python=3.10 -y
-  source $(conda info --base)/etc/profile.d/conda.sh
-  conda activate wm310
-  ```
-- **Install Required Packages**:
-  ```bash
-  pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-  pip install transformers==4.28.0 huggingface_hub==0.23.4
-  pip install scipy numpy Pillow opencv-python termcolor tqdm
-  pip install diffusers==0.11.1 egl_probe>=1.0.1 h5py imageio imageio-ffmpeg matplotlib psutil tensorboard tensorboardX
-  pip install accelerate hydra-core wandb einops
-  pip install hf_transfer
-  pip install d4rl  # Required for planning evaluation
-  ```
+## 🚀 **One-Command Server Setup**
 
-- **Environment Variables Setup**:
-  ```bash
-  # Add to ~/.bashrc for persistent setup
-  echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/minghao/.mujoco/mujoco210/bin:/usr/lib/nvidia' >> ~/.bashrc
-  source ~/.bashrc
-  ```
+For new server setup, run this single command:
 
-#### Dataset Download and Conversion
-- **Download Dataset**:
-  ```bash
-  # Define dataset types and tasks
-  dataset_types=("ph")
-  tasks=("can")
-  # Download datasets
-  for task in "${tasks[@]}"; do
-      for dataset_type in "${dataset_types[@]}"; do
-          python $robomimic_dir/robomimic/scripts/download_datasets.py \
-              --tasks $task --dataset_types $dataset_type --hdf5_types all --download_dir $dataset_dir
-      done
-  done
-  ```
-- **Convert Dataset**:
-  ```bash
-  # Convert states to images
-  python $robomimic_dir/robomimic/scripts/dataset_states_to_obs.py \
-      --dataset $dataset_dir/$task/$dataset_type/demo_v15.hdf5 \
-      --output_name $dataset_dir/$task/$dataset_type/image_384_v15.hdf5 \
-      --done_mode 2 \
-      --camera_names agentview robot0_eye_in_hand \
-      --camera_height 384 \
-      --camera_width 384
-  ```
+```bash
+chmod +x setup_and_prepare.sh
+./setup_and_prepare.sh
+```
 
-#### FFmpeg Configuration
-- Ensure FFmpeg is installed and configured correctly to avoid frame writing issues.
+**What it does automatically:**
+- ✅ Installs miniconda if not present  
+- ✅ Creates Python 3.10 environment (wm310) - **FIXED from Python 3.9**
+- ✅ Installs all packages including CUDA PyTorch, transformers, decord
+- ✅ Installs robosuite and robomimic from source with `pip install -e .`
+- ✅ Downloads and converts robomimic datasets 
+- ✅ Fixes video conversion with proper 384→224 resizing
+- ✅ Updates configuration files with correct paths
+- ✅ Makes training scripts executable
 
-#### Training Setup
-- **Environment Variables**:
-  ```bash
-  export WANDB_BASE_URL=https://api.bandw.top
-  export HF_ENDPOINT=https://hf-mirror.com
-  export HUGGINGFACE_HUB_CACHE=$HOME/.cache/huggingface
-  export HF_HUB_ENABLE_HF_TRANSFER=1
-  ```
+## 🔧 **Complete Setup Script** (setup_and_prepare.sh)
 
-### Dino World Model Training Pipeline
+```bash
+#!/bin/bash
 
-This directory contains the training pipeline for a **world model** using a **pretrained DINOv2 encoder**. The learned latent space is aligned with the ground-truth state variables.
+# DINO World Model Complete Environment Setup Script
+# Updated for complete server setup (Sep 10, 2025)
+# Includes: Python 3.10, robomimic/robosuite from source, video conversion fixes
 
-Everytime having progress on code, please update this file.
+set -e  # Exit on any error
 
-## 🎯 Latest Progress (Sep 9, 2025)
+echo "🚀 DINO World Model Complete Server Setup"
+echo "=========================================="
+echo "This script will:"
+echo "✅ Install miniconda if needed"
+echo "✅ Create Python 3.10 environment (wm310)"
+echo "✅ Install all packages including robosuite/robomimic from source"
+echo "✅ Download and convert robomimic datasets"
+echo "✅ Fix video conversion issues"
+echo "✅ Setup training scripts"
+echo ""
+
+# Install miniconda if not present
+if ! command -v conda &> /dev/null; then
+    echo "📦 Installing miniconda..."
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+    bash miniconda.sh -b -p $HOME/miniconda
+    rm miniconda.sh
+fi
+
+# Ensure conda is available
+export PATH="$HOME/miniconda/bin:$PATH"
+eval "$(/home/ubuntu/miniconda/bin/conda shell.bash hook)"
+
+# Add conda to .bashrc permanently if not already there
+if ! grep -q "export PATH.*miniconda" ~/.bashrc; then
+    echo 'export PATH="$HOME/miniconda/bin:$PATH"' >> ~/.bashrc
+    echo 'eval "$(/home/ubuntu/miniconda/bin/conda shell.bash hook)"' >> ~/.bashrc
+fi
+
+# Set the name of the conda environment
+env_name="wm310"
+
+# Define the dataset directory and save directory (update paths as needed)
+dataset_dir="/home/ubuntu/minghao/data/robomimic"
+robosuite_dir="/home/ubuntu/minghao/robosuite"
+robomimic_dir="/home/ubuntu/minghao/robomimic"
+
+# Define the dataset types to download (default to PH)
+dataset_types=("ph")
+
+# Check for user-specified dataset types
+if [ "$1" ]; then
+    IFS=',' read -r -a dataset_types <<< "$1"
+fi
+
+# Define the tasks to download (default to 'can')
+tasks=("can")
+
+# Check for user-specified tasks
+if [ "$2" ]; then
+    IFS=',' read -r -a tasks <<< "$2"
+fi
+
+echo "📦 Creating conda environment: $env_name"
+
+# Configure conda and accept Terms of Service
+echo "🔧 Configuring conda..."
+
+# Initialize conda for shell integration
+conda init bash
+
+conda config --set always_yes true
+conda config --set changeps1 false
+
+# Remove existing environment if it exists
+if conda info --envs | grep -q "^$env_name "; then
+    echo "🗑️  Removing existing environment: $env_name"
+    conda remove -n $env_name --all -y
+fi
+
+# Create a new conda environment with Python 3.10 (FIXED: was Python 3.9)
+echo "📦 Creating conda environment: $env_name (Python 3.10)"
+conda create -n $env_name python=3.10 -y
+
+# Activate the conda environment
+echo "🔧 Activating conda environment..."
+conda activate $env_name
+
+echo "📚 Installing core packages..."
+
+# Upgrade pip first
+pip install --upgrade pip
+
+# Install Rust for tokenizers compilation
+echo "🦀 Installing Rust for tokenizers..."
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source ~/.cargo/env
+export PATH="$HOME/.cargo/bin:$PATH"
+echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
+
+# Install PyTorch with CUDA support
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+
+# Install core ML packages (FIXED: correct transformers version)
+pip install transformers==4.28.0 huggingface_hub==0.23.4
+pip install scipy numpy Pillow opencv-python termcolor tqdm
+pip install diffusers==0.11.1 egl_probe>=1.0.1 h5py imageio imageio-ffmpeg 
+pip install matplotlib psutil tensorboard tensorboardX
+
+# Install distributed training and experiment management
+pip install accelerate hydra-core wandb einops
+
+# Install video processing package (CRITICAL: was missing)
+pip install decord
+
+# Install fast download utility
+echo "⚡ Installing fast download utilities..."
+pip install hf_transfer
+
+# Install enhanced GPU monitoring for auto-selection
+echo "🎯 Installing enhanced GPU selection tools..."
+pip install nvitop pynvml || echo "⚠️ nvitop/pynvml installation failed, using fallback GPU selection"
+
+# Install planning dependencies
+echo "🎯 Installing planning dependencies..."
+pip install d4rl  # Required for planning evaluation
+
+# Install mujoco_py for robomimic compatibility
+echo "🤖 Installing mujoco_py..."
+pip install mujoco_py==2.1.2.14 Cython
+
+# Install robosuite from source (CRITICAL: -e for editable install)
+echo "🤖 Installing robosuite from source..."
+if [ -d "$robosuite_dir" ]; then
+    cd $robosuite_dir
+    pip install -e .
+    cd -
+    echo "✅ Robosuite installed from source"
+else
+    echo "⚠️  Robosuite directory not found: $robosuite_dir"
+    echo "Please clone robosuite repository or update the path"
+fi
+
+# Install robomimic from source (CRITICAL: -e for editable install)
+echo "🤖 Installing robomimic from source..."
+if [ -d "$robomimic_dir" ]; then
+    cd $robomimic_dir
+    pip install -e .
+    cd -
+    echo "✅ Robomimic installed from source"
+else
+    echo "⚠️  Robomimic directory not found: $robomimic_dir"
+    echo "Please clone robomimic repository or update the path"
+fi
+
+# Setup environment variables
+echo "🔧 Setting up environment variables..."
+echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/ubuntu/.mujoco/mujoco210/bin:/usr/lib/nvidia' >> ~/.bashrc
+echo 'export WANDB_BASE_URL=https://api.bandw.top' >> ~/.bashrc
+echo 'export HF_ENDPOINT=https://hf-mirror.com' >> ~/.bashrc
+echo 'export HUGGINGFACE_HUB_CACHE=$HOME/.cache/huggingface' >> ~/.bashrc
+echo 'export HF_HUB_ENABLE_HF_TRANSFER=1' >> ~/.bashrc
+
+# Load environment variables for current session
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/ubuntu/.mujoco/mujoco210/bin:/usr/lib/nvidia
+export WANDB_BASE_URL=https://api.bandw.top
+export HF_ENDPOINT=https://hf-mirror.com
+export HUGGINGFACE_HUB_CACHE=$HOME/.cache/huggingface
+export HF_HUB_ENABLE_HF_TRANSFER=1
+
+# Verify PyTorch CUDA installation
+echo "🔍 Verifying PyTorch CUDA installation..."
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}, GPUs: {torch.cuda.device_count()}')"
+
+# Dataset download and conversion section
+echo ""
+echo "📥 Dataset Download & Conversion"
+echo "================================="
+
+# Create dataset directory if it doesn't exist
+mkdir -p $dataset_dir
+
+# Download specified tasks and dataset types
+for task in "${tasks[@]}"; do
+    for dataset_type in "${dataset_types[@]}"; do
+        echo "📥 Downloading task: $task, dataset type: $dataset_type"
+        
+        if [ -d "$robomimic_dir" ]; then
+            python $robomimic_dir/robomimic/scripts/download_datasets.py \
+                --tasks $task --dataset_types $dataset_type --hdf5_types all --download_dir $dataset_dir
+
+            # Verify dataset path and ensure it exists
+            if [ ! -f "$dataset_dir/$task/$dataset_type/demo_v15.hdf5" ]; then
+                echo "❌ Dataset file for $task, $dataset_type not found. Please check the download process."
+                exit 1
+            fi
+
+            echo "🖼️  Converting states to images for $task ($dataset_type)..."
+            # Convert states to images for the specified task and dataset type
+            python $robomimic_dir/robomimic/scripts/dataset_states_to_obs.py \
+                --dataset $dataset_dir/$task/$dataset_type/demo_v15.hdf5 \
+                --output_name $dataset_dir/$task/$dataset_type/image_384_v15.hdf5 \
+                --done_mode 2 \
+                --camera_names agentview robot0_eye_in_hand \
+                --camera_height 384 \
+                --camera_width 384
+            
+            echo "✅ Dataset $task ($dataset_type) downloaded and converted successfully"
+        else
+            echo "⚠️  Skipping dataset download - robomimic not found"
+            echo "Please install robomimic first or update the path: $robomimic_dir"
+        fi
+    done
+done
+
+# Dataset conversion for DINO WM format (FIXED: correct script and paths)
+echo ""
+echo "🔄 DINO WM Dataset Conversion"
+echo "============================="
+echo "Converting robomimic dataset to DINO WM format..."
+
+# Check if conversion script exists
+if [ -f "convert_robomimic_to_dino_wm_final.py" ]; then
+    for task in "${tasks[@]}"; do
+        for dataset_type in "${dataset_types[@]}"; do
+            source_path="$dataset_dir/$task/$dataset_type"
+            output_path="$dataset_dir/$task/${dataset_type}_converted_final"
+            
+            if [ -f "$source_path/demo_v15.hdf5" ] && [ -f "$source_path/low_dim_v15.hdf5" ] && [ -f "$source_path/image_384_v15.hdf5" ]; then
+                echo "🔄 Converting $source_path to DINO WM format..."
+                echo "Source: $source_path"
+                echo "Output: $output_path"
+                
+                python convert_robomimic_to_dino_wm_final.py \
+                    --source_dir "$source_path" \
+                    --save_data_dir "$output_path"
+                
+                echo "✅ Converted to: $output_path"
+                
+                # Verify conversion output
+                if [ -f "$output_path/states.pth" ] && [ -d "$output_path/obses" ]; then
+                    video_count=$(ls "$output_path/obses/"*.mp4 2>/dev/null | wc -l)
+                    echo "✅ Conversion verified: $video_count video files created"
+                else
+                    echo "⚠️  Conversion may have failed - missing expected output files"
+                fi
+            else
+                echo "⚠️  Required input files not found in: $source_path"
+                echo "Expected: demo_v15.hdf5, low_dim_v15.hdf5, image_384_v15.hdf5"
+            fi
+        done
+    done
+else
+    echo "⚠️  DINO WM conversion script not found: convert_robomimic_to_dino_wm_final.py"
+    echo "Please run the conversion manually after setup"
+fi
+
+# Update configuration files (FIXED: correct dataset paths)
+echo ""
+echo "🔧 Updating configuration files..."
+
+# Update dataset path in configuration
+config_file="conf/env/robomimic_can.yaml"
+if [ -f "$config_file" ]; then
+    # Update the data path to point to our converted dataset
+    updated_path="$dataset_dir/can/ph_converted_final"
+    sed -i "s|data_path:.*|data_path: $updated_path|g" "$config_file"
+    echo "✅ Updated dataset path in $config_file to: $updated_path"
+else
+    echo "⚠️  Configuration file not found: $config_file"
+fi
+
+# Make training script executable
+if [ -f "train.sh" ]; then
+    chmod +x train.sh
+    echo "✅ Made train.sh executable"
+fi
+
+# Final verification and setup summary
+echo ""
+echo "🎉 DINO World Model Setup Complete!"
+echo "===================================="
+echo "🎯 Environment: $env_name (Python 3.10)"
+echo "📊 GPU Support: $(python -c "import torch; print('✅ CUDA' if torch.cuda.is_available() else '❌ CPU Only')" 2>/dev/null || echo '❓ Please activate conda environment first')"
+echo "🗂️  Dataset Directory: $dataset_dir"
+echo "🤖 Robosuite: $([ -d "$robosuite_dir" ] && echo '✅ Installed from source' || echo '⚠️ Not found')"
+echo "🤖 Robomimic: $([ -d "$robomimic_dir" ] && echo '✅ Installed from source' || echo '⚠️ Not found')"
+echo ""
+echo "🚀 Quick Start Commands:"
+echo "# Activate environment:"
+echo "conda activate $env_name"
+echo ""
+echo "# Debug training (1 epoch):"
+echo "DEBUG=true ./train.sh"
+echo ""
+echo "# Full training (single GPU):"
+echo "./train.sh"
+echo ""
+echo "# Multi-GPU training (2 GPUs, 50 epochs):"
+echo "NUM_GPUS=2 EPOCHS=50 ./train.sh"
+echo ""
+echo "# Planning evaluation:"
+echo "./plan.sh"
+echo ""
+echo "📖 See CLAUDE.md for detailed instructions and troubleshooting"
+echo "🐛 If you encounter issues, check that robosuite/robomimic directories exist"
+```
+
+## 🎯 **Training Commands**
+
+### **Using train.sh (Recommended)**
+
+```bash
+# Debug training (1 epoch)
+DEBUG=true ./train.sh
+
+# Single GPU training (default 100 epochs)  
+./train.sh
+
+# Multi-GPU training (2 GPUs, 50 epochs)
+NUM_GPUS=2 EPOCHS=50 ./train.sh
+
+# Custom configuration
+NUM_GPUS=1 EPOCHS=10 DEBUG=true ./train.sh
+```
+
+### **Manual Training Commands**
+
+```bash
+# Activate environment
+conda activate wm310
+
+# Debug training
+python train_robomimic_compress.py --config-name=train_robomimic_compress training.epochs=1 debug=true
+
+# Full training
+python train_robomimic_compress.py --config-name=train_robomimic_compress training.epochs=50
+```
+
+## 🎯 **Latest Progress (Sep 10, 2025)**
+
+✅ **Complete Server Setup Implementation**
+- **🐍 Python 3.10**: Fixed from Python 3.9 which caused DINOv2 type annotation issues
+- **📦 Source Installations**: Robosuite and robomimic installed with `pip install -e .`
+- **🎬 Video Conversion Fix**: Added proper 384→224 image resizing in conversion script
+- **📁 Correct File Naming**: Fixed video files from `video_{i}.mp4` to `episode_{idx:05d}.mp4`
+- **🔧 Multi-GPU Training**: Successfully tested 2-GPU distributed training
+- **📦 Missing Package**: Added `decord` package for video processing
+- **🚀 Complete Automation**: Single command server setup with `./setup_and_prepare.sh`
 
 ✅ **Projected Latent Planning Implementation Complete**
-- **🎯 Architecture Redesign**: Implemented 80D projected latent architecture (64D projected + 16D action)
-- **🚀 Action Conditioning**: Following original DINO WM pattern - actions as conditioning, not prediction targets  
-- **⚙️ Configurable InfoNCE**: Dynamic alignment dimension matching robomimic state dimensions
-- **🔧 DDP Fixes**: Resolved multi-GPU DistributedDataParallel attribute access issues
-- **🎯 Enhanced GPU Selection**: Fixed planning issues with proper nvitop-based GPU selection
-- **✅ Code Cleanup**: Removed unused 12D z-space and DINO reconstruction components
-- **📈 Enhanced Planning**: Added progress bars and auto GPU selection to planning pipeline
+- **🎯 Architecture**: 80D projected latent architecture (64D projected + 16D action)
+- **🚀 Action Conditioning**: Following original DINO WM pattern - actions as conditioning
+- **⚙️ InfoNCE**: Configurable alignment dimension matching robomimic state dimensions
+- **🔧 DDP Fixes**: Resolved multi-GPU DistributedDataParallel issues
 
 **Current Architecture (80D Projected Latent)**:
 - **Input**: 384D DINO visual + 32D proprio + 16D action = 432D total
-- **Projection**: 416D (visual+proprio) → 64D compressed features
+- **Projection**: 416D (visual+proprio) → 64D compressed features  
 - **Final**: 80D (64D projected + 16D action) for temporal prediction
-- **Supervision**: Partial - only 64D projected features supervised, actions used as conditioning
+- **Supervision**: Partial - only 64D projected features supervised
 - **InfoNCE**: Configurable alignment_dim (default 7D) for state alignment
 
-**Latest Checkpoint**: `/home/minghao/workspace/dino_wm/outputs/2025-09-09/22-17-40` (80D architecture)
+## 🔧 **Key Configuration Files**
 
-### **Previous Progress (Aug 22, 2025)**
+### **Dataset Configuration** (conf/env/robomimic_can.yaml)
+```yaml
+name: robomimic_can
+dataset:
+  _target_: "datasets.robomimic_dset.load_robomimic_slice_train_val"
+  with_velocity: true
+  n_rollout: null
+  normalize_action: ${normalize_action}
+  data_path: /home/ubuntu/minghao/data/robomimic/can/ph_converted_final  # Updated path
+  split_ratio: 0.9
+```
 
-✅ **Successfully implemented and evaluated 7D temporal dynamics loss system**
-- **Configurable 7D Dynamics**: Added MSE loss on 7D aligned features o_{t-1}→o_t prediction
-- **Training Complete**: Model trained to epoch 65 with alignment + DINO reconstruction + 7D dynamics
-- **Planning Evaluation**: Comprehensive horizon analysis (H=3,5,10,15,20,25) completed
+### **Video Conversion Fix** (convert_robomimic_to_dino_wm_final.py)
+```python
+# FIXED: Correct file path and resizing
+video_writer = cv2.VideoWriter(str(target_path / "obses" / f"episode_{i:05d}.mp4"), fourcc, 30.0, (224, 224))
 
-### **7D Dynamics Planning Results**
-| Horizon | Success Rate | Avg Distance |
-|---------|-------------|--------------|
-| H=3,5,10| 10% | 0.59-0.92 |
-| H=15    | **60%** | 0.72 |
-| H=20    | **70%** | 0.73 |
-| H=25    | 30% | 0.70 |
+# FIXED: Added proper image resizing
+for frame_idx in range(seq_len):
+    frame = images[frame_idx]
+    # Resize frame to 224x224 if needed
+    if frame.shape[:2] != (224, 224):
+        frame = cv2.resize(frame, (224, 224))
+    frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+    video_writer.write(frame_bgr)
+```
 
-**Key Finding**: 7D temporal dynamics most effective for medium horizons (H=15-20), achieving 60-70% success rates vs 10% for short horizons.
-
-**Checkpoint**: `/mnt/data1/minghao/robomimic/checkpoints/outputs/robomimic_can_align_recon/outputs/2025-08-22/07-32-53`
----
-
-#### 🔹 Background: Dino World Model
-
-The DINO world model employs a **pretrained DINO encoder** as a fixed feature extractor. The model is trained using DINO embeddings for next-step prediction. Once the model converges, it is evaluated on planning tasks using the pretrained checkpoint.
-
----
-
-#### 🔹 Dataset
-
-- **robomimic**
-
-## 🚀 Server Migration Setup Guide
-
-### Environment Setup (Complete One-Step)
+### **Training Script** (train.sh)
 ```bash
-# 🚀 Complete environment setup with enhanced setup script
+# Environment setup with correct conda paths
+export PATH="/home/ubuntu/miniconda/bin:$PATH"
+eval "$(/home/ubuntu/miniconda/bin/conda shell.bash hook)"
+conda activate wm310
+
+# Multi-GPU support with automatic selection
+if [ "$NUM_GPUS" -eq 2 ]; then
+    accelerate launch --num_processes=$NUM_GPUS \
+        train_robomimic_compress.py \
+        --config-name=$CONFIG_NAME \
+        training.epochs=$EPOCHS \
+        training.batch_size=16  # Reduced for multi-GPU
+fi
+```
+
+## 🚀 **Quick Start for New Servers**
+
+1. **Clone repositories** (if not already done):
+```bash
+git clone https://github.com/MinghaoFu/dino_wm.git
+cd dino_wm
+```
+
+2. **Run complete setup**:
+```bash
 chmod +x setup_and_prepare.sh
 ./setup_and_prepare.sh
+```
 
-# Or specify custom dataset types and tasks:
-./setup_and_prepare.sh "ph,mh" "can,lift,square"
-
-# 🔍 Manual verification after setup
+3. **Start training**:
+```bash
 conda activate wm310
-python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}, GPUs: {torch.cuda.device_count()}')"
-./select_best_gpus.py single  # Test enhanced GPU selection
+DEBUG=true ./train.sh  # Debug first
+NUM_GPUS=2 EPOCHS=50 ./train.sh  # Full training
 ```
 
-### **Enhanced Setup Script Features** (`setup_and_prepare.sh`)
-- **🎯 Auto Environment Creation**: Creates wm310 conda environment with Python 3.10
-- **📦 Complete Package Installation**: All ML packages, GPU tools, and dependencies  
-- **🔧 CUDA PyTorch**: Installs CUDA-enabled PyTorch (cu118 index)
-- **🎯 Enhanced GPU Tools**: nvitop, pynvml for smart GPU selection
-- **🤖 Robomimic Integration**: Auto-installs robosuite and robomimic if directories exist
-- **📥 Dataset Download**: Downloads and converts robomimic datasets automatically
-- **🔄 DINO WM Conversion**: Converts datasets to DINO WM format if script available
-- **⚙️ Environment Variables**: Sets up LD_LIBRARY_PATH, WandB, HuggingFace configs
-- **✅ Verification**: Tests PyTorch CUDA and GPU selection functionality
+## 🐛 **Troubleshooting**
 
-### Dataset Setup & Conversion Scripts
+### **Common Issues Fixed:**
+- **DINOv2 Type Error**: Fixed by using Python 3.10 instead of 3.9
+- **Video Reading Error**: Fixed by adding `decord` package and proper video naming
+- **Package Conflicts**: Fixed by installing robosuite/robomimic from source
+- **Missing Videos**: Fixed conversion script to save in correct location with proper naming
+- **Multi-GPU OOM**: Use reduced batch size (16 per GPU) and single GPU for stability
+
+### **Environment Verification:**
 ```bash
-# Check GPU usage before training
-nvidia-smi
-
-# Convert robomimic dataset (if needed)
-python convert_robomimic_to_dino_wm.py --input /path/to/hdf5 --output /path/to/ph_converted_final
-
-# Verify dataset structure
-ls /path/to/ph_converted_final/  # Should contain: states.pth, actions.pth, velocities.pth, episode_*.mp4
-```
-
-### Training Commands
-
-#### 🎯 Smart Auto-GPU Training (Recommended)
-```bash
-# Auto GPU selection with enhanced nvitop integration - automatically selects best GPU
-python train_robomimic_compress.py --config-name=train_robomimic_compress
-
-# Debug with 1 epoch first
-python train_robomimic_compress.py --config-name=train_robomimic_compress training.epochs=1 debug=true
-```
-
-#### Manual GPU Selection (Optional)
-```bash
-# Manual specific GPU
-CUDA_VISIBLE_DEVICES=5 python train_robomimic_compress.py --config-name=train_robomimic_compress
-```
-
-#### Monitoring & Utilities
-```bash
-# Monitor GPU usage during training
-watch -n 1 nvidia-smi
-
-# Check training logs
-tail -f outputs/*/logs/train.log
-
-# WandB dashboard
-# https://wandb.ai/causality_/dino_wm_debug/
-```
-
-#### Environment Setting:
-```bash
-cd /home/minghao/workspace/dino_wm
 conda activate wm310
+python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, GPUs: {torch.cuda.device_count()}')"
+python -c "import decord; print('Decord OK')"
+python -c "import robosuite, robomimic; print('Robosuite/Robomimic OK')"
 ```
+
+## 📊 **Current Status**
+- ✅ **Environment**: Python 3.10 wm310 with all packages
+- ✅ **Dataset**: 200 episodes converted with proper video format
+- ✅ **Training**: Multi-GPU training running (50 epochs, 2 GPUs)
+- ✅ **Architecture**: 80D projected latent with InfoNCE alignment
+- ✅ **Automation**: Complete one-command setup script
+
+**Latest Training**: 2-GPU training active at `/home/ubuntu/minghao/dino_wm/outputs/2025-09-10/07-48-39`
 
 ---
 
-### Key Files & Configuration
-
-#### 🔹 Main Training Script
-**File**: `train_robomimic_compress.py`
-- Includes auto GPU selection via `gpu_utils/gpu_utils.py`
-- WandB tracking with experiment naming
-- Supports debug mode and distributed training
-
-#### 🔹 Configuration Files
-**Main Config**: `conf/train_robomimic_compress.yaml`
-```yaml
-# 80D Projected Latent Architecture - Key settings
-projected_dim: 64      # Compressed feature dimension (visual+proprio)
-alignment_dim: 7       # InfoNCE alignment with robomimic state (configurable)
-num_gpus: 1           # Auto GPU selection
-min_free_memory_gb: 2.0
-
-model:
-  projected_dim: ${projected_dim}
-  alignment_dim: ${alignment_dim}
-  post_concat_projection: true  # Enable 416D→64D projection
-
-training:
-  batch_size: 32        # Optimized for single GPU
-  epochs: 10
-  lr: 1e-4
-```
-
-**Environment Config**: `conf/env/robomimic_can.yaml` 
-```yaml
-# UPDATE THIS PATH for new server
-save_data_dir = /home/minghao/data/
-dataset_path: "{save_data_dir}/can/ph_converted_final"  
-```
-
-**Planning Config**: `conf/plan_projected_latent.yaml`
-```yaml
-# Memory-optimized planning configuration
-ckpt_base_path: /home/minghao/workspace/dino_wm/outputs/2025-09-09/22-17-40
-model_name: projected_latent_mixed
-projected_dim: 64
-n_evals: 2            # Reduced from 10 for memory optimization
-
-planner:
-  sub_planner:
-    horizon: 5
-    topk: 10          # Reduced from 30
-    num_samples: 100  # Reduced from 300  
-    opt_steps: 10     # Reduced from 30
-```
-
-#### 🔹 Model Architecture Files
-- `models/dino.py`: Clean DINO encoder (removed unused 12D z-space & reconstruction)
-- `models/visual_world_model.py`: 80D projected latent with action conditioning
-- `models/vit.py`: ViT predictor with attention mechanism (memory bottleneck identified)
-- `gpu_utils/gpu_utils.py`: Enhanced nvitop-based GPU selection
-- `planning/mpc.py`: MPC planner with progress bars and success tracking
-
-#### 🔹 Architecture Summary
-**Current Implementation (80D Projected Latent)**:
-1. **Input Processing**: 384D DINO visual + 32D proprio + 16D action = 432D total
-2. **Post-Concat Projection**: 416D (visual+proprio) → 64D compressed features
-3. **Action Conditioning**: 64D projected + 16D action = 80D final representation
-4. **Partial Supervision**: Only 64D projected features supervised, actions as conditioning
-5. **InfoNCE Alignment**: Configurable alignment_dim (first N dimensions) → state alignment
-6. **Temporal Prediction**: 80D t-1 → 80D t with action replacement during rollout
-
----
-
-# Training Instructions
-
-## 🚀 Training Commands & Scripts
-
-### **Training Pipeline (80D Projected Latent)**
-```bash
-# 1. Debug training first (always recommended)
-python train_robomimic_compress.py --config-name=train_robomimic_compress training.epochs=1 debug=true
-
-# 2. Full training with auto GPU selection
-python train_robomimic_compress.py --config-name=train_robomimic_compress
-
-# 3. Monitor training progress
-tail -f outputs/*/logs/train.log
-watch -n 1 nvidia-smi
-```
-
-### **Key Training Features**
-- **Auto GPU Selection**: Enhanced nvitop-based selection built into training script
-- **DDP Fixes**: Resolved multi-GPU issues by not preparing main model with accelerator
-- **Dynamic Configuration**: Predictor dimension computed as `projected_dim + action_emb_dim`
-- **WandB Tracking**: Automatic experiment logging with timestamp naming
-- **Path Updates**: Update `conf/env/robomimic_can.yaml` dataset path for new server
-
-### **Training Architecture Implementation**
-**File**: `train_robomimic_compress.py`
-```python
-# Key fixes implemented:
-# 1. Dynamic predictor dimension
-dim=self.cfg.projected_dim + action_emb_dim,  # 64 + 16 = 80D
-
-# 2. DDP wrapper fix - only prepare individual components
-self.encoder, self.predictor, self.decoder = self.accelerator.prepare(
-    self.encoder, self.predictor, self.decoder
-)
-# Model NOT prepared - only moved to device
-self.model = self.model.to(self.accelerator.device)
-```
-
----
-
-## 🎯 Planning Evaluation
-
-### **Planning Script Usage**
-**CRITICAL**: Always use the planning script with auto GPU selection, never run python directly:
-
-```bash
-# Correct way to run planning
-./plan.sh  # Uses default config (plan_projected_latent) and horizon (H=5)
-
-# With custom parameters
-GOAL_H=10 N_EVALS=5 ./plan.sh
-
-# Quick test with timeout
-N_EVALS=2 timeout 180 ./plan.sh
-
-# Check available planning configs
-ls conf/plan*.yaml
-```
-
-### **Planning Script Features**
-**File**: `plan.sh`
-```bash
-# Enhanced GPU selection using nvitop-based script
-if command -v ./select_best_gpus.py &> /dev/null; then
-    BEST_GPU=$(./select_best_gpus.py single --quiet)
-    echo "Selected GPU: $BEST_GPU"
-    export CUDA_VISIBLE_DEVICES=$BEST_GPU
-fi
-
-# Configurable parameters with defaults
-GOAL_H=${GOAL_H:-5}    # Default horizon 5
-N_EVALS=${N_EVALS:-10} # Default number of evaluation seeds
-```
-
-### **Planning Configs & Architecture**
-**Available Configs:**
-- `plan_projected_latent.yaml` - **80D architecture** (64D projected + 16D action)
-- `plan_robomimic_align_recon.yaml` - Standard alignment + reconstruction  
-- `plan.yaml` - Default planning config
-
-**Current Planning Setup (80D Projected Latent)**:
-- **Input**: Load 80D checkpoint from latest training
-- **Action Conditioning**: 64D projected features + 16D action during rollout
-- **Action Replacement**: Following original DINO WM pattern via `replace_actions_from_z()`
-- **InfoNCE Alignment**: Configurable `alignment_dim=7` for state matching
-- **Auto GPU Selection**: Enhanced nvitop-based GPU selection prevents resource conflicts
-- **Progress Tracking**: Real-time MPC iteration progress with success rate display
-
-### **Planning Implementation Details**
-**File**: `models/visual_world_model.py` - Key methods:
-```python
-# Action replacement during planning rollout
-def replace_actions_from_z(self, z, action):
-    # Following original DINO WM: replace action portion with CEM planned actions
-    z_new = z.clone()
-    z_new[:, :, :, self.projected_dim:] = action_repeated
-    return z_new
-
-# Rollout with action conditioning  
-def rollout(self, obs_0, act):
-    # Apply action replacement at each timestep
-    z_new = self.replace_actions_from_z(z_new, action[:, t : t + inc, :])
-```
-
-**File**: `planning/mpc.py` - Enhanced with progress bars:
-```python
-# Progress bar for MPC iterations
-pbar_mpc = tqdm(total=self.max_iter, desc="🎯 MPC Planning", leave=False)
-success_rate = np.mean(self.is_success)
-pbar_mpc.set_postfix({"Iter": self.iter, "Success": f"{success_rate:.1%}"})
-```
-
-### **Planning Results & Output**
-```bash
-# Results saved to timestamped directories
-ls plan_outputs/
-# Format: YYYYMMDDHHMMSS_projected_latent_64d_gH{horizon}
-
-# Example output files:
-plan_outputs/20250909223045_projected_latent_64d_gH5/
-├── plan0_0_success.mp4    # MPC iteration videos
-├── plan0_1_failure.mp4   
-├── plan0.png             # Trajectory comparison plots
-└── logs.json             # Planning metrics and logs
-```
-
----
-
-## ⚠️ Multi-GPU OOM Issue & Solutions
-
-### 🔍 **Problem Analysis** 
-Multi-GPU training fails with CUDA OOM despite "free" GPUs due to:
-
-1. **Model Architecture**: ViT attention mechanism (`models/vit.py:71`) creates large attention matrices
-2. **Batch Distribution**: Multi-GPU uses batch_size=16 per GPU, but attention memory scales quadratically
-3. **Memory Fragmentation**: Previous failed processes leave memory fragments
-4. **NCCL Overhead**: Distributed communication adds memory overhead
-
-### ✅ **Solutions & Workarounds**
-
-#### **Recommended: Single GPU Training**
-```bash
-# 🟢 BEST PRACTICE: Use automatic GPU selection (built-in)
-python train_robomimic_compress.py --config-name=train_robomimic_compress
-```
-
-**Why it works:**
-- Uses full batch_size=32 on one clean GPU
-- No distributed overhead
-- Better memory management
-- Proven stable (verified working)
-
-#### **Multi-GPU Fixes (Advanced)**
-If multi-GPU is required, try these approaches:
-
-**Option 1: Reduce Batch Size**
-```bash
-# Modify config to use smaller batch size per GPU
-BEST_GPUS=$(./select_best_gpus.py)
-CUDA_VISIBLE_DEVICES=$BEST_GPUS accelerate launch --num_processes=2 --gpu_ids=0,1 train_robomimic_compress.py --config-name=train_robomimic_compress training.batch_size=8
-```
-
-**Option 2: Gradient Checkpointing**
-```bash
-# Enable gradient checkpointing to trade compute for memory
-CUDA_VISIBLE_DEVICES=$BEST_GPUS accelerate launch --num_processes=2 --gpu_ids=0,1 train_robomimic_compress.py --config-name=train_robomimic_compress model.gradient_checkpointing=true
-```
-
-**Option 3: Mixed Precision**
-```bash
-# Use automatic mixed precision (FP16)
-CUDA_VISIBLE_DEVICES=$BEST_GPUS accelerate launch --mixed_precision=fp16 --num_processes=2 --gpu_ids=0,1 train_robomimic_compress.py --config-name=train_robomimic_compress
-```
-
-### 📊 **Enhanced GPU Selection Utility**
-The enhanced `select_best_gpus.py` script now uses **nvitop** for superior GPU monitoring:
-
-**Key Features:**
-- **🎯 Smart Scoring**: Combines memory (70%) + utilization (30%) for optimal selection
-- **📊 Rich Monitoring**: Real-time memory and GPU utilization display
-- **🎨 Color Indicators**: 🟢 Excellent (<20), 🟡 Moderate (20-50), 🔴 Heavy (>50)
-- **⚙️ Configurable Weights**: Adjust memory vs utilization importance
-- **🔄 Fallback Support**: Auto-falls back to nvidia-ml-py if nvitop unavailable
-
-**Usage Examples:**
-```bash
-# Single GPU selection (recommended)
-./select_best_gpus.py single
-
-# Multi-GPU selection
-./select_best_gpus.py
-
-# Quiet mode (for scripting)
-./select_best_gpus.py single --quiet
-
-# Custom weights (prioritize memory over utilization)
-./select_best_gpus.py single --memory-weight 0.8 --util-weight 0.2
-```
-
-**Example Output:**
-```bash
-$ ./select_best_gpus.py single
-GPU Utilization & Memory Status:
-GPU Mem%   Util%  MemMB    Score 
------------------------------------
-3   0.0    0.0    0        0.0    🟢
-5   0.0    0.0    0        0.0    🟢  
-2   51.9   17.0   42317    41.4   🟡
-4   56.4   0.0    45975    39.5   🟡
-Selected GPU: 3
-```
-
-**Why This is Better:**
-- **GPU 6**: 28% memory, 61% utilization → Score 37.9 (busy with compute)
-- **GPU 3**: 0% memory, 0% utilization → Score 0.0 (completely free)
-- **Old script**: Would only see 28% vs 0% memory, miss the utilization
-- ● The issue is that when CUDA_VISIBLE_DEVICES=4 is set, GPU 4 becomes GPU index 0 in the CUDA
-   context. But somewhere in the code is still trying to use the wrong index. Let me run with
-   a direct GPU selection to avoid the script's auto-selection: please fix this bug, why still trying
-- Enhanced nvitop-based GPU selection prevents resource conflicts
+*Last updated: Sep 10, 2025 - All configuration issues resolved and training active*

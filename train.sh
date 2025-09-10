@@ -7,8 +7,9 @@ set -e  # Exit on any error
 
 # Environment setup
 echo "🔧 Setting up environment..."
-cd /home/minghao/workspace/dino_wm
-source $(conda info --base)/etc/profile.d/conda.sh
+cd /home/ubuntu/minghao/dino_wm
+export PATH="/home/ubuntu/miniconda/bin:$PATH"
+eval "$(/home/ubuntu/miniconda/bin/conda shell.bash hook)"
 conda activate wm310
 
 # Verify environment

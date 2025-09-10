@@ -39,13 +39,8 @@ def convert_robomimic_to_dino_wm_final(
     print("Loading source data...")
     demo_file = h5py.File(f"{source_dir}/demo_v15.hdf5", 'r')
     low_dim_file = h5py.File(f"{source_dir}/low_dim_v15.hdf5", 'r')
-    # Try to load image file, skip if not available
-    try:
-        image_file = h5py.File(f"{source_dir}/image_384_v15.hdf5", 'r')
-        print("Image file loaded successfully")
-    except FileNotFoundError:
-        print("Image file not found, using demo file for video generation")
-        image_file = demo_file  # Use demo file as fallback
+    # Update the image file name to 'image_384_v15.hdf5'
+    image_file = h5py.File(f"{source_dir}/image_384_v15.hdf5", 'r')
     
     # 获取demo keys
     demo_keys = [key for key in demo_file['data'].keys() if key.startswith('demo_')]
@@ -129,15 +124,12 @@ def convert_robomimic_to_dino_wm_final(
         try:
             # Initialize video writer with appropriate settings
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            video_writer = cv2.VideoWriter(str(target_path / "obses" / f"episode_{i:05d}.mp4"), fourcc, 30.0, (224, 224))
+            video_writer = cv2.VideoWriter(str(target_path / f"video_{i}.mp4"), fourcc, 30.0, (224, 224))
 
             # Write frames to video
             for frame_idx in range(seq_len):
                 # 从RGB转换为BGR用于OpenCV
                 frame = images[frame_idx]
-                # Resize frame to 224x224 if needed
-                if frame.shape[:2] != (224, 224):
-                    frame = cv2.resize(frame, (224, 224))
                 frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
                 video_writer.write(frame_bgr)
         except Exception as e:
