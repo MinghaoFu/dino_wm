@@ -21,6 +21,7 @@ objective:
   alpha: 1.0
   base: 2
   mode: projected_last
+  projected_dim: ${projected_dim}
 
 planner:
   _target_: planning.mpc.MPCPlanner

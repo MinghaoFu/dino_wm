@@ -25,15 +25,19 @@ export HF_HUB_ENABLE_HF_TRANSFER=1
 # Training configuration
 CONFIG_NAME="train_robomimic_compress"
 DEBUG_MODE=${DEBUG:-false}
-EPOCHS=${EPOCHS:-100}
+EPOCHS=${EPOCHS:-50}  # Default to 50 epochs, can be overridden
 NUM_GPUS=${NUM_GPUS:-1}  # Default to 1 GPU, can be overridden
 GPU_IDS=${GPU_IDS:-"auto"}  # Can specify specific GPUs like "0,1" or "auto"
+RESUME_FROM=${RESUME_FROM:-""}  # Optional: specify checkpoint directory to resume from
 
 echo "🚀 Starting DINO World Model training..."
 echo "Config: $CONFIG_NAME"
 echo "Debug mode: $DEBUG_MODE"
 echo "Epochs: $EPOCHS"
 echo "Number of GPUs: $NUM_GPUS"
+if [ -n "$RESUME_FROM" ]; then
+    echo "Resume from: $RESUME_FROM"
+fi
 
 # GPU selection - use simple approach that works with PyTorch
 if [ "$GPU_IDS" = "auto" ]; then
@@ -80,11 +84,41 @@ fi
 
 # Full training
 echo "🎯 Starting full training..."
+
+# Set up training command with optional resume path
+TRAIN_ARGS="--config-name=$CONFIG_NAME training.epochs=$EPOCHS"
+if [ -n "$RESUME_FROM" ]; then
+    echo "📂 Will resume from checkpoint: $RESUME_FROM"
+    TRAIN_ARGS="$TRAIN_ARGS +saved_folder=$RESUME_FROM"
+fi
+
+# Function to copy models and specific config file after training starts (only for full training)
+copy_models_and_config() {
+    local output_dir=$1
+    local config_name=$2
+    if [ -n "$output_dir" ] && [ -d "$output_dir" ]; then
+        echo "📁 Copying models directory and config file to: $output_dir"
+        
+        # Copy models directory
+        if [ -d "./models" ]; then
+            cp -r ./models "$output_dir/"
+            echo "✅ Copied ./models to $output_dir/models"
+        fi
+        
+        # Copy the specific config file being used
+        if [ -f "./conf/${config_name}.yaml" ]; then
+            cp "./conf/${config_name}.yaml" "$output_dir/"
+            echo "✅ Copied ./conf/${config_name}.yaml to $output_dir/"
+        fi
+        
+        echo "🎯 Training run is now self-contained with models and config"
+    fi
+}
+
 if [ "$NUM_GPUS" -eq 1 ]; then
     echo "Running single GPU training..."
-    python train_robomimic_compress.py \
-        --config-name=$CONFIG_NAME \
-        training.epochs=$EPOCHS
+    python train_robomimic_compress.py $TRAIN_ARGS &
+    TRAIN_PID=$!
 else
     echo "Running multi-GPU training with $NUM_GPUS GPUs..."
     # Multi-GPU with accelerate
@@ -92,19 +126,38 @@ else
         --num_processes=$NUM_GPUS \
         --mixed_precision=no \
         train_robomimic_compress.py \
-        --config-name=$CONFIG_NAME \
-        training.epochs=$EPOCHS \
-        training.batch_size=16  # Reduce batch size per GPU for multi-GPU
+        $TRAIN_ARGS \
+        training.batch_size=16 & # Reduce batch size per GPU for multi-GPU
+    TRAIN_PID=$!
 fi
 
+# Wait a moment for output directory to be created, then copy models and config
+echo "⏳ Waiting for training to initialize and create output directory..."
+sleep 30
+
+# Find the most recent output directory created today
+OUTPUT_DIR=$(find ./outputs/$(date +%Y-%m-%d) -maxdepth 1 -type d -name "$(date +%H)*" 2>/dev/null | sort | tail -1)
+if [ -n "$OUTPUT_DIR" ]; then
+    copy_models_and_config "$OUTPUT_DIR" "$CONFIG_NAME"
+else
+    echo "⚠️ Could not find output directory to copy models and config"
+fi
+
+# Wait for training to complete
+wait $TRAIN_PID
+TRAIN_EXIT_CODE=$?
+
 # Check training status
-if [ $? -eq 0 ]; then
+if [ $TRAIN_EXIT_CODE -eq 0 ]; then
     echo "✅ Training completed successfully!"
     echo "📊 Check WandB: https://wandb.ai/causality_/dino_wm_align_recon"
     echo "📁 Output directory: outputs/$(date +%Y-%m-%d)"
+    if [ -n "$OUTPUT_DIR" ]; then
+        echo "📂 Models and config saved to: $OUTPUT_DIR"
+    fi
 else
     echo "❌ Training failed!"
-    exit 1
+    exit $TRAIN_EXIT_CODE
 fi
 
 echo "🎉 Training script completed!"

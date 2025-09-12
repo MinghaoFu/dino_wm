@@ -122,8 +122,27 @@ source ~/.cargo/env
 export PATH="$HOME/.cargo/bin:$PATH"
 echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
 
-# Install PyTorch with CUDA support
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+# Install PyTorch with CUDA support - auto-detect CUDA version
+echo "🔍 Detecting CUDA version..."
+if command -v nvidia-smi &> /dev/null; then
+    CUDA_VERSION=$(nvidia-smi | grep "CUDA Version" | awk '{print $9}' | cut -d. -f1-2)
+    echo "Detected CUDA Version: $CUDA_VERSION"
+    
+    # Map CUDA version to PyTorch index
+    if [[ "$CUDA_VERSION" == "12.4" ]] || [[ "$CUDA_VERSION" == "12."* ]]; then
+        echo "Installing PyTorch for CUDA 12.x..."
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+    elif [[ "$CUDA_VERSION" == "11."* ]]; then
+        echo "Installing PyTorch for CUDA 11.x..."
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+    else
+        echo "Installing PyTorch with default CUDA support..."
+        pip install torch torchvision
+    fi
+else
+    echo "No CUDA detected, installing CPU-only PyTorch..."
+    pip install torch torchvision
+fi
 
 # Install core ML packages (FIXED: correct transformers version)
 pip install transformers==4.28.0 huggingface_hub==0.23.4
@@ -152,6 +171,20 @@ pip install d4rl  # Required for planning evaluation
 # Install mujoco_py for robomimic compatibility
 echo "🤖 Installing mujoco_py..."
 pip install mujoco_py==2.1.2.14 Cython
+
+# Install MuJoCo 2.1.0 binary and modern Python bindings for planning evaluation
+echo "🔧 Installing MuJoCo 2.1.0 binary..."
+wget https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz -O /tmp/mujoco210.tar.gz
+mkdir -p /home/ubuntu/.mujoco && cd /home/ubuntu/.mujoco && tar -xzf /tmp/mujoco210.tar.gz
+echo "✅ MuJoCo 2.1.0 installed to /home/ubuntu/.mujoco/mujoco210"
+
+# Install OpenGL libraries required for MuJoCo
+echo "🖥️ Installing OpenGL libraries..."
+sudo apt-get update && sudo apt-get install -y libosmesa6-dev libgl1-mesa-glx libglfw3 libglew-dev
+
+# Install modern MuJoCo Python bindings (works better than mujoco-py)
+pip uninstall mujoco-py -y  # Remove old bindings if present
+pip install mujoco  # Install modern bindings
 
 # Install robosuite from source (CRITICAL: -e for editable install)
 echo "🤖 Installing robosuite from source..."
@@ -338,7 +371,7 @@ echo "🐛 If you encounter issues, check that robosuite/robomimic directories e
 # Debug training (1 epoch)
 DEBUG=true ./train.sh
 
-# Single GPU training (default 100 epochs)  
+# Single GPU training (default 50 epochs)  
 ./train.sh
 
 # Multi-GPU training (2 GPUs, 50 epochs)
@@ -361,9 +394,15 @@ python train_robomimic_compress.py --config-name=train_robomimic_compress traini
 python train_robomimic_compress.py --config-name=train_robomimic_compress training.epochs=50
 ```
 
-## 🎯 **Latest Progress (Sep 10, 2025)**
+## 🎯 **Latest Progress (Sep 11, 2025)**
 
-✅ **Complete Server Setup Implementation**
+✅ **CUDA Compatibility Fix**
+- **🔧 Auto-Detection**: Setup script now automatically detects CUDA version and installs compatible PyTorch
+- **📦 CUDA 12.x Support**: For systems with CUDA 12.x drivers, automatically installs PyTorch with cu121
+- **📦 CUDA 11.x Support**: For systems with CUDA 11.x drivers, automatically installs PyTorch with cu118
+- **🚀 Prevents Compatibility Issues**: Avoids "system not yet initialized" errors from mismatched CUDA versions
+
+✅ **Complete Server Setup Implementation (Sep 10, 2025)**
 - **🐍 Python 3.10**: Fixed from Python 3.9 which caused DINOv2 type annotation issues
 - **📦 Source Installations**: Robosuite and robomimic installed with `pip install -e .`
 - **🎬 Video Conversion Fix**: Added proper 384→224 image resizing in conversion script
@@ -481,3 +520,4 @@ python -c "import robosuite, robomimic; print('Robosuite/Robomimic OK')"
 ---
 
 *Last updated: Sep 10, 2025 - All configuration issues resolved and training active*
+- for get about 64, it just a hyperparameter, we term it as projected dim

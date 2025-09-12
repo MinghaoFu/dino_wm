@@ -1,67 +1,184 @@
-Requirement already satisfied: transformers==4.28.0 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (4.28.0)
-Requirement already satisfied: huggingface_hub==0.23.4 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (0.23.4)
-Requirement already satisfied: scipy in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (1.15.3)
+Looking in indexes: https://pypi.org/simple, https://pip.repos.neuron.amazonaws.com
+Collecting transformers==4.28.0
+  Downloading transformers-4.28.0-py3-none-any.whl.metadata (109 kB)
+Collecting huggingface_hub==0.23.4
+  Downloading huggingface_hub-0.23.4-py3-none-any.whl.metadata (12 kB)
+Collecting scipy
+  Downloading scipy-1.15.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (61 kB)
+Requirement already satisfied: numpy in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (2.1.2)
 Requirement already satisfied: Pillow in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (11.0.0)
-Requirement already satisfied: opencv-python in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (4.12.0.88)
-Requirement already satisfied: termcolor in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (3.1.0)
-Requirement already satisfied: tqdm in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (4.67.1)
-Requirement already satisfied: diffusers==0.11.1 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (0.11.1)
-Requirement already satisfied: egl_probe in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (1.0.2)
-Requirement already satisfied: h5py in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (3.14.0)
-Requirement already satisfied: imageio in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (2.37.0)
-Requirement already satisfied: imageio-ffmpeg in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (0.6.0)
-Requirement already satisfied: matplotlib in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (3.10.6)
-Requirement already satisfied: psutil in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (7.0.0)
-Requirement already satisfied: tensorboard in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (2.20.0)
-Requirement already satisfied: tensorboardX in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (2.6.4)
-Requirement already satisfied: accelerate in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (1.10.1)
-Requirement already satisfied: hydra-core in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (1.3.2)
-Requirement already satisfied: wandb in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (0.21.3)
-Requirement already satisfied: einops in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (0.8.1)
-Requirement already satisfied: hf_transfer in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (0.1.9)
-Requirement already satisfied: decord in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (0.6.0)
+Collecting opencv-python
+  Downloading opencv_python-4.12.0.88-cp37-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (19 kB)
+Collecting termcolor
+  Downloading termcolor-3.1.0-py3-none-any.whl.metadata (6.4 kB)
+Collecting tqdm
+  Downloading tqdm-4.67.1-py3-none-any.whl.metadata (57 kB)
+Collecting diffusers==0.11.1
+  Downloading diffusers-0.11.1-py3-none-any.whl.metadata (29 kB)
+Collecting egl_probe
+  Downloading egl_probe-1.0.2.tar.gz (217 kB)
+  Preparing metadata (setup.py): started
+  Preparing metadata (setup.py): finished with status 'done'
+Collecting h5py
+  Downloading h5py-3.14.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (2.7 kB)
+Collecting imageio
+  Downloading imageio-2.37.0-py3-none-any.whl.metadata (5.2 kB)
+Collecting imageio-ffmpeg
+  Downloading imageio_ffmpeg-0.6.0-py3-none-manylinux2014_x86_64.whl.metadata (1.5 kB)
+Collecting matplotlib
+  Downloading matplotlib-3.10.6-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (11 kB)
+Collecting psutil
+  Downloading psutil-7.0.0-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (22 kB)
+Collecting tensorboard
+  Downloading tensorboard-2.20.0-py3-none-any.whl.metadata (1.8 kB)
+Collecting tensorboardX
+  Downloading tensorboardx-2.6.4-py3-none-any.whl.metadata (6.2 kB)
+Collecting accelerate
+  Downloading accelerate-1.10.1-py3-none-any.whl.metadata (19 kB)
+Collecting hydra-core
+  Downloading hydra_core-1.3.2-py3-none-any.whl.metadata (5.5 kB)
+Collecting wandb
+  Downloading wandb-0.21.3-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (10 kB)
+Collecting einops
+  Downloading einops-0.8.1-py3-none-any.whl.metadata (13 kB)
+Collecting decord
+  Downloading decord-0.6.0-py3-none-manylinux2010_x86_64.whl.metadata (422 bytes)
+Collecting hf_transfer
+  Downloading hf_transfer-0.1.9-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (1.7 kB)
+Collecting d4rl
+  Downloading d4rl-1.1-py3-none-any.whl.metadata (270 bytes)
+Collecting mujoco_py==2.1.2.14
+  Downloading mujoco_py-2.1.2.14-py3-none-any.whl.metadata (669 bytes)
+Collecting Cython
+  Downloading cython-3.1.3-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (4.7 kB)
+Collecting nvitop
+  Downloading nvitop-1.5.3-py3-none-any.whl.metadata (78 kB)
+Collecting pynvml
+  Downloading pynvml-13.0.1-py3-none-any.whl.metadata (5.6 kB)
 Requirement already satisfied: filelock in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from transformers==4.28.0) (3.13.1)
-Requirement already satisfied: numpy>=1.17 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from transformers==4.28.0) (2.1.2)
-Requirement already satisfied: packaging>=20.0 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from transformers==4.28.0) (25.0)
-Requirement already satisfied: pyyaml>=5.1 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from transformers==4.28.0) (6.0.2)
-Requirement already satisfied: regex!=2019.12.17 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from transformers==4.28.0) (2025.9.1)
-Requirement already satisfied: requests in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from transformers==4.28.0) (2.32.5)
-Requirement already satisfied: tokenizers!=0.11.3,<0.14,>=0.11.1 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from transformers==4.28.0) (0.13.3)
+Collecting packaging>=20.0 (from transformers==4.28.0)
+  Downloading packaging-25.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting pyyaml>=5.1 (from transformers==4.28.0)
+  Downloading PyYAML-6.0.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (2.1 kB)
+Collecting regex!=2019.12.17 (from transformers==4.28.0)
+  Downloading regex-2025.9.1-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (40 kB)
+Collecting requests (from transformers==4.28.0)
+  Downloading requests-2.32.5-py3-none-any.whl.metadata (4.9 kB)
+Collecting tokenizers!=0.11.3,<0.14,>=0.11.1 (from transformers==4.28.0)
+  Downloading tokenizers-0.13.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.7 kB)
 Requirement already satisfied: fsspec>=2023.5.0 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from huggingface_hub==0.23.4) (2024.6.1)
 Requirement already satisfied: typing-extensions>=3.7.4.3 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from huggingface_hub==0.23.4) (4.12.2)
-Requirement already satisfied: importlib-metadata in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from diffusers==0.11.1) (8.7.0)
-Requirement already satisfied: contourpy>=1.0.1 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from matplotlib) (1.3.2)
-Requirement already satisfied: cycler>=0.10 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from matplotlib) (0.12.1)
-Requirement already satisfied: fonttools>=4.22.0 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from matplotlib) (4.59.2)
-Requirement already satisfied: kiwisolver>=1.3.1 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from matplotlib) (1.4.9)
-Requirement already satisfied: pyparsing>=2.3.1 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from matplotlib) (3.2.3)
-Requirement already satisfied: python-dateutil>=2.7 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from matplotlib) (2.9.0.post0)
-Requirement already satisfied: absl-py>=0.4 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from tensorboard) (2.3.1)
-Requirement already satisfied: grpcio>=1.48.2 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from tensorboard) (1.74.0)
-Requirement already satisfied: markdown>=2.6.8 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from tensorboard) (3.9)
-Requirement already satisfied: protobuf!=4.24.0,>=3.19.6 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from tensorboard) (6.32.0)
+Collecting importlib-metadata (from diffusers==0.11.1)
+  Downloading importlib_metadata-8.7.0-py3-none-any.whl.metadata (4.8 kB)
+Collecting glfw>=1.4.0 (from mujoco_py==2.1.2.14)
+  Downloading glfw-2.9.0-py2.py27.py3.py30.py31.py32.py33.py34.py35.py36.py37.py38.p39.p310.p311.p312.p313-none-manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+Collecting cffi>=1.10 (from mujoco_py==2.1.2.14)
+  Downloading cffi-2.0.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.6 kB)
+Collecting fasteners~=0.15 (from mujoco_py==2.1.2.14)
+  Downloading fasteners-0.20-py3-none-any.whl.metadata (4.8 kB)
+Collecting contourpy>=1.0.1 (from matplotlib)
+  Downloading contourpy-1.3.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.5 kB)
+Collecting cycler>=0.10 (from matplotlib)
+  Downloading cycler-0.12.1-py3-none-any.whl.metadata (3.8 kB)
+Collecting fonttools>=4.22.0 (from matplotlib)
+  Downloading fonttools-4.59.2-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (109 kB)
+Collecting kiwisolver>=1.3.1 (from matplotlib)
+  Downloading kiwisolver-1.4.9-cp310-cp310-manylinux_2_12_x86_64.manylinux2010_x86_64.whl.metadata (6.3 kB)
+Collecting pyparsing>=2.3.1 (from matplotlib)
+  Downloading pyparsing-3.2.3-py3-none-any.whl.metadata (5.0 kB)
+Collecting python-dateutil>=2.7 (from matplotlib)
+  Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+Collecting absl-py>=0.4 (from tensorboard)
+  Downloading absl_py-2.3.1-py3-none-any.whl.metadata (3.3 kB)
+Collecting grpcio>=1.48.2 (from tensorboard)
+  Downloading grpcio-1.74.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (3.8 kB)
+Collecting markdown>=2.6.8 (from tensorboard)
+  Downloading markdown-3.9-py3-none-any.whl.metadata (5.1 kB)
+Collecting protobuf!=4.24.0,>=3.19.6 (from tensorboard)
+  Downloading protobuf-6.32.0-cp39-abi3-manylinux2014_x86_64.whl.metadata (593 bytes)
 Requirement already satisfied: setuptools>=41.0.0 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from tensorboard) (78.1.1)
-Requirement already satisfied: tensorboard-data-server<0.8.0,>=0.7.0 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from tensorboard) (0.7.2)
-Requirement already satisfied: werkzeug>=1.0.1 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from tensorboard) (3.1.3)
+Collecting tensorboard-data-server<0.8.0,>=0.7.0 (from tensorboard)
+  Downloading tensorboard_data_server-0.7.2-py3-none-manylinux_2_31_x86_64.whl.metadata (1.1 kB)
+Collecting werkzeug>=1.0.1 (from tensorboard)
+  Downloading werkzeug-3.1.3-py3-none-any.whl.metadata (3.7 kB)
 Requirement already satisfied: torch>=2.0.0 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from accelerate) (2.7.1+cu118)
-Requirement already satisfied: safetensors>=0.4.3 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from accelerate) (0.6.2)
-Requirement already satisfied: omegaconf<2.4,>=2.2 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from hydra-core) (2.3.0)
-Requirement already satisfied: antlr4-python3-runtime==4.9.* in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from hydra-core) (4.9.3)
-Requirement already satisfied: click>=8.0.1 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from wandb) (8.2.1)
-Requirement already satisfied: gitpython!=3.1.29,>=1.0.0 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from wandb) (3.1.45)
-Requirement already satisfied: platformdirs in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from wandb) (4.4.0)
-Requirement already satisfied: pydantic<3 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from wandb) (2.11.7)
-Requirement already satisfied: sentry-sdk>=2.0.0 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from wandb) (2.37.1)
-Requirement already satisfied: annotated-types>=0.6.0 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from pydantic<3->wandb) (0.7.0)
-Requirement already satisfied: pydantic-core==2.33.2 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from pydantic<3->wandb) (2.33.2)
-Requirement already satisfied: typing-inspection>=0.4.0 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from pydantic<3->wandb) (0.4.1)
-Requirement already satisfied: charset_normalizer<4,>=2 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from requests->transformers==4.28.0) (3.4.3)
-Requirement already satisfied: idna<4,>=2.5 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from requests->transformers==4.28.0) (3.10)
-Requirement already satisfied: urllib3<3,>=1.21.1 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from requests->transformers==4.28.0) (2.5.0)
-Requirement already satisfied: certifi>=2017.4.17 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from requests->transformers==4.28.0) (2025.8.3)
-Requirement already satisfied: gitdb<5,>=4.0.1 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from gitpython!=3.1.29,>=1.0.0->wandb) (4.0.12)
-Requirement already satisfied: smmap<6,>=3.0.1 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from gitdb<5,>=4.0.1->gitpython!=3.1.29,>=1.0.0->wandb) (5.0.2)
-Requirement already satisfied: six>=1.5 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from python-dateutil>=2.7->matplotlib) (1.17.0)
+Collecting safetensors>=0.4.3 (from accelerate)
+  Downloading safetensors-0.6.2-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.1 kB)
+Collecting omegaconf<2.4,>=2.2 (from hydra-core)
+  Downloading omegaconf-2.3.0-py3-none-any.whl.metadata (3.9 kB)
+Collecting antlr4-python3-runtime==4.9.* (from hydra-core)
+  Downloading antlr4-python3-runtime-4.9.3.tar.gz (117 kB)
+  Preparing metadata (setup.py): started
+  Preparing metadata (setup.py): finished with status 'done'
+Collecting click>=8.0.1 (from wandb)
+  Downloading click-8.2.1-py3-none-any.whl.metadata (2.5 kB)
+Collecting gitpython!=3.1.29,>=1.0.0 (from wandb)
+  Downloading gitpython-3.1.45-py3-none-any.whl.metadata (13 kB)
+Collecting platformdirs (from wandb)
+  Downloading platformdirs-4.4.0-py3-none-any.whl.metadata (12 kB)
+Collecting pydantic<3 (from wandb)
+  Downloading pydantic-2.11.7-py3-none-any.whl.metadata (67 kB)
+Collecting sentry-sdk>=2.0.0 (from wandb)
+  Downloading sentry_sdk-2.37.1-py2.py3-none-any.whl.metadata (10 kB)
+Collecting annotated-types>=0.6.0 (from pydantic<3->wandb)
+  Downloading annotated_types-0.7.0-py3-none-any.whl.metadata (15 kB)
+Collecting pydantic-core==2.33.2 (from pydantic<3->wandb)
+  Downloading pydantic_core-2.33.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.8 kB)
+Collecting typing-inspection>=0.4.0 (from pydantic<3->wandb)
+  Downloading typing_inspection-0.4.1-py3-none-any.whl.metadata (2.6 kB)
+Collecting charset_normalizer<4,>=2 (from requests->transformers==4.28.0)
+  Downloading charset_normalizer-3.4.3-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (36 kB)
+Collecting idna<4,>=2.5 (from requests->transformers==4.28.0)
+  Downloading idna-3.10-py3-none-any.whl.metadata (10 kB)
+Collecting urllib3<3,>=1.21.1 (from requests->transformers==4.28.0)
+  Downloading urllib3-2.5.0-py3-none-any.whl.metadata (6.5 kB)
+Collecting certifi>=2017.4.17 (from requests->transformers==4.28.0)
+  Downloading certifi-2025.8.3-py3-none-any.whl.metadata (2.4 kB)
+Collecting gym<0.25.0 (from d4rl)
+  Downloading gym-0.24.1.tar.gz (696 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 696.4/696.4 kB 25.2 MB/s  0:00:00
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Collecting pybullet (from d4rl)
+  Downloading pybullet-3.2.7-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (1.8 kB)
+Collecting dm-control>=1.0.3 (from d4rl)
+  Downloading dm_control-1.0.31-py3-none-any.whl.metadata (1.6 kB)
+Collecting cloudpickle>=1.2.0 (from gym<0.25.0->d4rl)
+  Downloading cloudpickle-3.1.1-py3-none-any.whl.metadata (7.1 kB)
+Collecting gym_notices>=0.0.4 (from gym<0.25.0->d4rl)
+  Downloading gym_notices-0.1.0-py3-none-any.whl.metadata (1.2 kB)
+Collecting nvidia-ml-py<13.581.0a0,>=11.450.51 (from nvitop)
+  Downloading nvidia_ml_py-13.580.65-py3-none-any.whl.metadata (9.6 kB)
+Collecting pycparser (from cffi>=1.10->mujoco_py==2.1.2.14)
+  Downloading pycparser-2.23-py3-none-any.whl.metadata (993 bytes)
+Collecting dm-env (from dm-control>=1.0.3->d4rl)
+  Downloading dm_env-1.6-py3-none-any.whl.metadata (966 bytes)
+Collecting dm-tree!=0.1.2 (from dm-control>=1.0.3->d4rl)
+  Downloading dm_tree-0.1.9-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (2.2 kB)
+Collecting labmaze (from dm-control>=1.0.3->d4rl)
+  Downloading labmaze-1.0.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (278 bytes)
+Collecting lxml (from dm-control>=1.0.3->d4rl)
+  Downloading lxml-6.0.1-cp310-cp310-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl.metadata (3.8 kB)
+Collecting mujoco>=3.3.3 (from dm-control>=1.0.3->d4rl)
+  Downloading mujoco-3.3.5-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (41 kB)
+Collecting pyopengl>=3.1.4 (from dm-control>=1.0.3->d4rl)
+  Downloading pyopengl-3.1.10-py3-none-any.whl.metadata (3.3 kB)
+Collecting attrs>=18.2.0 (from dm-tree!=0.1.2->dm-control>=1.0.3->d4rl)
+  Downloading attrs-25.3.0-py3-none-any.whl.metadata (10 kB)
+Collecting wrapt>=1.11.2 (from dm-tree!=0.1.2->dm-control>=1.0.3->d4rl)
+  Downloading wrapt-1.17.3-cp310-cp310-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (6.4 kB)
+Collecting gitdb<5,>=4.0.1 (from gitpython!=3.1.29,>=1.0.0->wandb)
+  Downloading gitdb-4.0.12-py3-none-any.whl.metadata (1.2 kB)
+Collecting smmap<6,>=3.0.1 (from gitdb<5,>=4.0.1->gitpython!=3.1.29,>=1.0.0->wandb)
+  Downloading smmap-5.0.2-py3-none-any.whl.metadata (4.3 kB)
+Collecting etils[epath] (from mujoco>=3.3.3->dm-control>=1.0.3->d4rl)
+  Downloading etils-1.13.0-py3-none-any.whl.metadata (6.5 kB)
+Collecting six>=1.5 (from python-dateutil>=2.7->matplotlib)
+  Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
 Requirement already satisfied: sympy>=1.13.3 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from torch>=2.0.0->accelerate) (1.13.3)
 Requirement already satisfied: networkx in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from torch>=2.0.0->accelerate) (3.3)
 Requirement already satisfied: jinja2 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from torch>=2.0.0->accelerate) (3.1.4)
@@ -79,4 +196,132 @@ Requirement already satisfied: nvidia-nvtx-cu11==11.8.86 in /home/ubuntu/minicon
 Requirement already satisfied: triton==3.3.1 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from torch>=2.0.0->accelerate) (3.3.1)
 Requirement already satisfied: mpmath<1.4,>=1.1.0 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from sympy>=1.13.3->torch>=2.0.0->accelerate) (1.3.0)
 Requirement already satisfied: MarkupSafe>=2.1.1 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from werkzeug>=1.0.1->tensorboard) (2.1.5)
-Requirement already satisfied: zipp>=3.20 in /home/ubuntu/miniconda/envs/wm310/lib/python3.10/site-packages (from importlib-metadata->diffusers==0.11.1) (3.23.0)
+Collecting importlib_resources (from etils[epath]->mujoco>=3.3.3->dm-control>=1.0.3->d4rl)
+  Downloading importlib_resources-6.5.2-py3-none-any.whl.metadata (3.9 kB)
+Collecting zipp (from etils[epath]->mujoco>=3.3.3->dm-control>=1.0.3->d4rl)
+  Downloading zipp-3.23.0-py3-none-any.whl.metadata (3.6 kB)
+Downloading transformers-4.28.0-py3-none-any.whl (7.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.0/7.0 MB 138.0 MB/s  0:00:00
+Downloading huggingface_hub-0.23.4-py3-none-any.whl (402 kB)
+Downloading diffusers-0.11.1-py3-none-any.whl (524 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 524.9/524.9 kB 42.6 MB/s  0:00:00
+Downloading mujoco_py-2.1.2.14-py3-none-any.whl (2.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.4/2.4 MB 140.7 MB/s  0:00:00
+Downloading fasteners-0.20-py3-none-any.whl (18 kB)
+Downloading tokenizers-0.13.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (7.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.8/7.8 MB 139.3 MB/s  0:00:00
+Downloading scipy-1.15.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (37.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 37.7/37.7 MB 200.2 MB/s  0:00:00
+Downloading opencv_python-4.12.0.88-cp37-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (67.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 67.0/67.0 MB 199.0 MB/s  0:00:00
+Downloading termcolor-3.1.0-py3-none-any.whl (7.7 kB)
+Downloading tqdm-4.67.1-py3-none-any.whl (78 kB)
+Downloading h5py-3.14.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (4.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.6/4.6 MB 119.8 MB/s  0:00:00
+Downloading imageio-2.37.0-py3-none-any.whl (315 kB)
+Downloading imageio_ffmpeg-0.6.0-py3-none-manylinux2014_x86_64.whl (29.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 29.5/29.5 MB 198.3 MB/s  0:00:00
+Downloading matplotlib-3.10.6-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (8.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8.7/8.7 MB 171.8 MB/s  0:00:00
+Downloading psutil-7.0.0-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl (277 kB)
+Downloading tensorboard-2.20.0-py3-none-any.whl (5.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.5/5.5 MB 131.6 MB/s  0:00:00
+Downloading tensorboard_data_server-0.7.2-py3-none-manylinux_2_31_x86_64.whl (6.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.6/6.6 MB 141.8 MB/s  0:00:00
+Downloading tensorboardx-2.6.4-py3-none-any.whl (87 kB)
+Downloading accelerate-1.10.1-py3-none-any.whl (374 kB)
+Downloading hydra_core-1.3.2-py3-none-any.whl (154 kB)
+Downloading omegaconf-2.3.0-py3-none-any.whl (79 kB)
+Downloading wandb-0.21.3-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (19.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 19.6/19.6 MB 166.9 MB/s  0:00:00
+Downloading protobuf-6.32.0-cp39-abi3-manylinux2014_x86_64.whl (322 kB)
+Downloading pydantic-2.11.7-py3-none-any.whl (444 kB)
+Downloading pydantic_core-2.33.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.0/2.0 MB 137.9 MB/s  0:00:00
+Downloading requests-2.32.5-py3-none-any.whl (64 kB)
+Downloading charset_normalizer-3.4.3-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (152 kB)
+Downloading idna-3.10-py3-none-any.whl (70 kB)
+Downloading urllib3-2.5.0-py3-none-any.whl (129 kB)
+Downloading einops-0.8.1-py3-none-any.whl (64 kB)
+Downloading decord-0.6.0-py3-none-manylinux2010_x86_64.whl (13.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 13.6/13.6 MB 165.9 MB/s  0:00:00
+Downloading hf_transfer-0.1.9-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.6/3.6 MB 77.6 MB/s  0:00:00
+Downloading d4rl-1.1-py3-none-any.whl (26.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 26.4/26.4 MB 81.6 MB/s  0:00:00
+Downloading cython-3.1.3-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (3.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.4/3.4 MB 158.1 MB/s  0:00:00
+Downloading nvitop-1.5.3-py3-none-any.whl (213 kB)
+Downloading nvidia_ml_py-13.580.65-py3-none-any.whl (48 kB)
+Downloading pynvml-13.0.1-py3-none-any.whl (28 kB)
+Downloading absl_py-2.3.1-py3-none-any.whl (135 kB)
+Downloading annotated_types-0.7.0-py3-none-any.whl (13 kB)
+Downloading certifi-2025.8.3-py3-none-any.whl (161 kB)
+Downloading cffi-2.0.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (216 kB)
+Downloading click-8.2.1-py3-none-any.whl (102 kB)
+Downloading cloudpickle-3.1.1-py3-none-any.whl (20 kB)
+Downloading contourpy-1.3.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (325 kB)
+Downloading cycler-0.12.1-py3-none-any.whl (8.3 kB)
+Downloading dm_control-1.0.31-py3-none-any.whl (56.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 56.4/56.4 MB 101.4 MB/s  0:00:00
+Downloading dm_tree-0.1.9-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (152 kB)
+Downloading attrs-25.3.0-py3-none-any.whl (63 kB)
+Downloading fonttools-4.59.2-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (4.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.8/4.8 MB 172.4 MB/s  0:00:00
+Downloading gitpython-3.1.45-py3-none-any.whl (208 kB)
+Downloading gitdb-4.0.12-py3-none-any.whl (62 kB)
+Downloading smmap-5.0.2-py3-none-any.whl (24 kB)
+Downloading glfw-2.9.0-py2.py27.py3.py30.py31.py32.py33.py34.py35.py36.py37.py38.p39.p310.p311.p312.p313-none-manylinux_2_28_x86_64.whl (243 kB)
+Downloading grpcio-1.74.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (6.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.2/6.2 MB 138.9 MB/s  0:00:00
+Downloading gym_notices-0.1.0-py3-none-any.whl (3.3 kB)
+Downloading kiwisolver-1.4.9-cp310-cp310-manylinux_2_12_x86_64.manylinux2010_x86_64.whl (1.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.6/1.6 MB 69.9 MB/s  0:00:00
+Downloading markdown-3.9-py3-none-any.whl (107 kB)
+Downloading mujoco-3.3.5-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (6.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.6/6.6 MB 105.7 MB/s  0:00:00
+Downloading packaging-25.0-py3-none-any.whl (66 kB)
+Downloading pyopengl-3.1.10-py3-none-any.whl (3.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.2/3.2 MB 157.1 MB/s  0:00:00
+Downloading pyparsing-3.2.3-py3-none-any.whl (111 kB)
+Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+Downloading PyYAML-6.0.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (751 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 751.2/751.2 kB 67.3 MB/s  0:00:00
+Downloading regex-2025.9.1-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (789 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 789.9/789.9 kB 75.7 MB/s  0:00:00
+Downloading safetensors-0.6.2-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (485 kB)
+Downloading sentry_sdk-2.37.1-py2.py3-none-any.whl (368 kB)
+Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+Downloading typing_inspection-0.4.1-py3-none-any.whl (14 kB)
+Downloading werkzeug-3.1.3-py3-none-any.whl (224 kB)
+Downloading wrapt-1.17.3-cp310-cp310-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (81 kB)
+Downloading dm_env-1.6-py3-none-any.whl (26 kB)
+Downloading etils-1.13.0-py3-none-any.whl (170 kB)
+Downloading importlib_metadata-8.7.0-py3-none-any.whl (27 kB)
+Downloading zipp-3.23.0-py3-none-any.whl (10 kB)
+Downloading importlib_resources-6.5.2-py3-none-any.whl (37 kB)
+Downloading labmaze-1.0.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (4.9 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.9/4.9 MB 122.4 MB/s  0:00:00
+Downloading lxml-6.0.1-cp310-cp310-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl (5.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.3/5.3 MB 170.6 MB/s  0:00:00
+Downloading platformdirs-4.4.0-py3-none-any.whl (18 kB)
+Downloading pybullet-3.2.7-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (103.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 103.2/103.2 MB 94.9 MB/s  0:00:01
+Downloading pycparser-2.23-py3-none-any.whl (118 kB)
+Building wheels for collected packages: egl_probe, antlr4-python3-runtime, gym
+  Building wheel for egl_probe (setup.py): started
+  Building wheel for egl_probe (setup.py): finished with status 'done'
+  Created wheel for egl_probe: filename=egl_probe-1.0.2-cp310-cp310-linux_x86_64.whl size=475361 sha256=b837a7f1f5255b1093885b5cf5def60e42ebc9d98a014b0bbe0772830805f8b6
+  Stored in directory: /home/ubuntu/.cache/pip/wheels/4a/27/b6/55a3dc8ddd82b0d7b99f3b61cfac265953409e69ee33729ae4
+  Building wheel for antlr4-python3-runtime (setup.py): started
+  Building wheel for antlr4-python3-runtime (setup.py): finished with status 'done'
+  Created wheel for antlr4-python3-runtime: filename=antlr4_python3_runtime-4.9.3-py3-none-any.whl size=144590 sha256=4f883a1f53fd908af6dde845fd3029ebe2fdb602b5df31d09f67e9e511306e8f
+  Stored in directory: /home/ubuntu/.cache/pip/wheels/12/93/dd/1f6a127edc45659556564c5730f6d4e300888f4bca2d4c5a88
+  Building wheel for gym (pyproject.toml): started
+  Building wheel for gym (pyproject.toml): finished with status 'done'
+  Created wheel for gym: filename=gym-0.24.1-py3-none-any.whl size=793231 sha256=352c704ead30a957e8490ad60b4c1813c73da767dbeb101d5b6e692b88b73c2c
+  Stored in directory: /home/ubuntu/.cache/pip/wheels/c4/fb/19/388995b88cb551717a8dff40c889172cd12fadf994216a0a22
+Successfully built egl_probe antlr4-python3-runtime gym
+Installing collected packages: tokenizers, pyopengl, pybullet, nvidia-ml-py, gym_notices, glfw, egl_probe, antlr4-python3-runtime, zipp, wrapt, werkzeug, urllib3, typing-inspection, tqdm, termcolor, tensorboard-data-server, smmap, six, scipy, safetensors, regex, pyyaml, pyparsing, pynvml, pydantic-core, pycparser, psutil, protobuf, platformdirs, packaging, opencv-python, markdown, lxml, kiwisolver, importlib_resources, imageio-ffmpeg, imageio, idna, hf_transfer, h5py, grpcio, fonttools, fasteners, etils, einops, decord, Cython, cycler, contourpy, cloudpickle, click, charset_normalizer, certifi, attrs, annotated-types, absl-py, tensorboardX, tensorboard, sentry-sdk, requests, python-dateutil, pydantic, omegaconf, nvitop, labmaze, importlib-metadata, gym, gitdb, dm-tree, cffi, mujoco_py, matplotlib, hydra-core, huggingface_hub, gitpython, dm-env, wandb, transformers, mujoco, diffusers, accelerate, dm-control, d4rl
+
+Successfully installed Cython-3.1.3 absl-py-2.3.1 accelerate-1.10.1 annotated-types-0.7.0 antlr4-python3-runtime-4.9.3 attrs-25.3.0 certifi-2025.8.3 cffi-2.0.0 charset_normalizer-3.4.3 click-8.2.1 cloudpickle-3.1.1 contourpy-1.3.2 cycler-0.12.1 d4rl-1.1 decord-0.6.0 diffusers-0.11.1 dm-control-1.0.31 dm-env-1.6 dm-tree-0.1.9 egl_probe-1.0.2 einops-0.8.1 etils-1.13.0 fasteners-0.20 fonttools-4.59.2 gitdb-4.0.12 gitpython-3.1.45 glfw-2.9.0 grpcio-1.74.0 gym-0.24.1 gym_notices-0.1.0 h5py-3.14.0 hf_transfer-0.1.9 huggingface_hub-0.23.4 hydra-core-1.3.2 idna-3.10 imageio-2.37.0 imageio-ffmpeg-0.6.0 importlib-metadata-8.7.0 importlib_resources-6.5.2 kiwisolver-1.4.9 labmaze-1.0.6 lxml-6.0.1 markdown-3.9 matplotlib-3.10.6 mujoco-3.3.5 mujoco_py-2.1.2.14 nvidia-ml-py-13.580.65 nvitop-1.5.3 omegaconf-2.3.0 opencv-python-4.12.0.88 packaging-25.0 platformdirs-4.4.0 protobuf-6.32.0 psutil-7.0.0 pybullet-3.2.7 pycparser-2.23 pydantic-2.11.7 pydantic-core-2.33.2 pynvml-13.0.1 pyopengl-3.1.10 pyparsing-3.2.3 python-dateutil-2.9.0.post0 pyyaml-6.0.2 regex-2025.9.1 requests-2.32.5 safetensors-0.6.2 scipy-1.15.3 sentry-sdk-2.37.1 six-1.17.0 smmap-5.0.2 tensorboard-2.20.0 tensorboard-data-server-0.7.2 tensorboardX-2.6.4 termcolor-3.1.0 tokenizers-0.13.3 tqdm-4.67.1 transformers-4.28.0 typing-inspection-0.4.1 urllib3-2.5.0 wandb-0.21.3 werkzeug-3.1.3 wrapt-1.17.3 zipp-3.23.0

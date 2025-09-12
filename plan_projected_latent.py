@@ -108,8 +108,11 @@ class PlanWorkspace:
         self.action_dim = self.dset.action_dim * self.frameskip
         self.debug_dset_init = cfg_dict["debug_dset_init"]
 
+        # Pass projected_dim directly to avoid recursive interpolation
+        objective_config = cfg_dict["objective"].copy()
+        objective_config["projected_dim"] = cfg_dict.get("projected_dim", 64)
         objective_fn = hydra.utils.call(
-            cfg_dict["objective"],
+            objective_config,
         )
 
         self.data_preprocessor = Preprocessor(

@@ -220,13 +220,8 @@ class Trainer:
             log.warning("Keys not found in ckpt: %s", not_in_ckpt)
 
     def init_models(self):
-        model_ckpt = Path(self.cfg.saved_folder) / "checkpoints" / "model_latest.pth"
-        if model_ckpt.exists():
-            self.load_ckpt(model_ckpt)
-            log.info(f"Resuming from epoch {self.epoch}: {model_ckpt}")
-
-        # initialize encoder
-        if self.encoder is None:
+        # Initialize encoder first
+        if not hasattr(self, 'encoder') or self.encoder is None:
             self.encoder = hydra.utils.instantiate(
                 self.cfg.encoder,
             )
@@ -297,11 +292,9 @@ class Trainer:
                         self.decoder = torch.load(decoder_path, weights_only=False)
                     log.info(f"Loaded decoder from {decoder_path}")
                 else:
-                    # Following original DINO WM: decoder accepts full features (projected + action)
-                    decoder_input_dim = self.cfg.projected_dim + action_emb_dim  # 64D projected + 16D action = 80D
                     self.decoder = hydra.utils.instantiate(
                         self.cfg.decoder,
-                        emb_dim=decoder_input_dim,  # 80D (full features like original DINO WM)
+                        emb_dim=self.cfg.projected_dim,
                     )
             if not self.train_decoder:
                 for param in self.decoder.parameters():
@@ -356,6 +349,12 @@ class Trainer:
         # This allows custom methods like encode(), rollout(), decode_obs() to work directly
         # However, we still need to move the model to the correct device
         self.model = self.model.to(self.accelerator.device)
+        
+        # Load checkpoint after all models are initialized
+        model_ckpt = Path(self.cfg.saved_folder) / "checkpoints" / "model_latest.pth"
+        if model_ckpt.exists():
+            self.load_ckpt(model_ckpt)
+            log.info(f"Resuming from epoch {self.epoch}: {model_ckpt}")
 
     def init_optimizers(self):
         self.encoder_optimizer = torch.optim.Adam(

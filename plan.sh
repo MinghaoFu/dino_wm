@@ -1,50 +1,54 @@
 #!/bin/bash
 
-# DINO World Model Planning Script  
-# Uses same GPU selection strategy as train.sh
+# DINO World Model Planning Script
+# Runs planning evaluation with latest checkpoint
 
 set -e  # Exit on any error
 
+echo "🎯 DINO World Model Planning Evaluation"
+echo "======================================"
+
 # Environment setup
-echo "🔧 Setting up planning environment..."
-cd /home/minghao/workspace/dino_wm
-source ~/.bashrc  # Load environment variables including LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/minghao/.mujoco/mujoco210/bin:/usr/lib/nvidia
-source $(conda info --base)/etc/profile.d/conda.sh
+echo "🔧 Setting up environment..."
+cd /home/ubuntu/minghao/dino_wm
+export PATH="/home/ubuntu/miniconda/bin:$PATH"
+eval "$(/home/ubuntu/miniconda/bin/conda shell.bash hook)"
 conda activate wm310
 
-# Planning configuration
-CONFIG_NAME="plan_projected_latent"
-GOAL_H=${GOAL_H:-5}  # Default horizon 5, can be overridden
-N_EVALS=${N_EVALS:-10}  # Default number of evaluation seeds per horizon
+# MuJoCo and other environment variables
+export MUJOCO_PY_MUJOCO_PATH=$HOME/.mujoco/mujoco210
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mujoco210/bin:/usr/lib/nvidia
+export WANDB_BASE_URL=https://api.bandw.top
+export HF_ENDPOINT=https://hf-mirror.com
+export HUGGINGFACE_HUB_CACHE=$HOME/.cache/huggingface
+export HF_HUB_ENABLE_HF_TRANSFER=1
 
-echo "🚀 Starting DINO World Model planning..."
-echo "Config: $CONFIG_NAME"
-echo "Goal Horizon: $GOAL_H"
+# Configuration
+CKPT_PATH=${CKPT_PATH:-"/home/ubuntu/minghao/dino_wm/outputs/2025-09-11/09-16-55"}
+DATA_PATH=${DATA_PATH:-"/home/ubuntu/minghao/data/robomimic/can/ph_converted_final"}
+GPU_ID=${GPU_ID:-2}  # Default to GPU 2
 
-# Enhanced GPU selection using nvitop-based script
-echo "🎯 Auto-selecting best GPU..."
-if command -v ./select_best_gpus.py &> /dev/null; then
-    BEST_GPU=$(./select_best_gpus.py single --quiet)
-    echo "Selected GPU: $BEST_GPU"
-    export CUDA_VISIBLE_DEVICES=$BEST_GPU
-else
-    echo "⚠️  Enhanced GPU selection script not found, using basic selection"
-    BEST_GPU=$(nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits | sort -k2 -n | head -1 | cut -d',' -f1)
-    export CUDA_VISIBLE_DEVICES=$BEST_GPU
-    echo "Selected GPU: $BEST_GPU"
-fi
+echo "🎯 Planning Configuration:"
+echo "Checkpoint: $CKPT_PATH"
+echo "Data path: $DATA_PATH" 
+echo "GPU: $GPU_ID"
 
-# Run planning
-echo "🎯 Starting planning evaluation..."
-python plan_projected_latent.py --config-name=$CONFIG_NAME goal_H=$GOAL_H n_evals=$N_EVALS
-
-# Check planning status
-if [ $? -eq 0 ]; then
-    echo "✅ Planning completed successfully!"
-else
-    echo "❌ Planning failed!"
+# Verify checkpoint exists
+if [ ! -d "$CKPT_PATH" ]; then
+    echo "❌ Checkpoint directory not found: $CKPT_PATH"
     exit 1
 fi
 
-echo "🎉 Planning script completed!"
+if [ ! -d "$DATA_PATH" ]; then
+    echo "❌ Data directory not found: $DATA_PATH"
+    exit 1
+fi
+
+echo "🚀 Starting planning evaluation..."
+
+# Run planning
+CUDA_VISIBLE_DEVICES=$GPU_ID python plan_projected_latent.py \
+    --config-name=plan_projected_latent \
+    ckpt_base_path=$CKPT_PATH
+
+echo "✅ Planning evaluation completed!"

@@ -96,8 +96,27 @@ source ~/.cargo/env
 export PATH="$HOME/.cargo/bin:$PATH"
 echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
 
-# Install PyTorch with CUDA support
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+# Install PyTorch with CUDA support - auto-detect CUDA version
+echo "🔍 Detecting CUDA version..."
+if command -v nvidia-smi &> /dev/null; then
+    CUDA_VERSION=$(nvidia-smi | grep "CUDA Version" | awk '{print $9}' | cut -d. -f1-2)
+    echo "Detected CUDA Version: $CUDA_VERSION"
+    
+    # Map CUDA version to PyTorch index
+    if [[ "$CUDA_VERSION" == "12.4" ]] || [[ "$CUDA_VERSION" == "12."* ]]; then
+        echo "Installing PyTorch for CUDA 12.x..."
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+    elif [[ "$CUDA_VERSION" == "11."* ]]; then
+        echo "Installing PyTorch for CUDA 11.x..."
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+    else
+        echo "Installing PyTorch with default CUDA support..."
+        pip install torch torchvision
+    fi
+else
+    echo "No CUDA detected, installing CPU-only PyTorch..."
+    pip install torch torchvision
+fi
 
 # Install core ML packages (FIXED: correct transformers version)
 pip install transformers==4.28.0 huggingface_hub==0.23.4

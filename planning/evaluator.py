@@ -172,15 +172,21 @@ class PlanEvaluator:  # evaluator for planning
         mean_proprio_dist = np.mean(proprio_dists)
 
         e_obs = move_to_device(self.preprocessor.transform_obs(e_obs), self.device)
-        e_z_obs = self.wm.encode_obs(e_obs)
-        div_visual_emb = torch.norm(e_z_obs["visual"] - i_z_obs["visual"]).item()
-        div_proprio_emb = torch.norm(e_z_obs["proprio"] - i_z_obs["proprio"]).item()
+        # Create dummy actions for encoding (environment observations don't need real actions)
+        batch_size = e_obs['visual'].shape[0]
+        seq_len = e_obs['visual'].shape[1]
+        dummy_actions = torch.zeros(batch_size, seq_len, 10, device=self.device)
+        e_z_comp, e_z_obs = self.wm.encode(e_obs, dummy_actions)
+        # Extract first 64D projected features for comparison (exclude actions)
+        e_projected = e_z_comp[:, :, :, :64]  # Environment projected features (64D)
+        i_projected = i_z_obs["projected"]  # Rollout projected features (64D)
+        
+        div_compress_emb = torch.norm(e_projected - i_projected).item()
 
         logs.update({
             "mean_visual_dist": mean_visual_dist,
             "mean_proprio_dist": mean_proprio_dist,
-            "mean_div_visual_emb": div_visual_emb,
-            "mean_div_proprio_emb": div_proprio_emb,
+            "mean_div_compress_emb": div_compress_emb,
         })
 
         return logs, successes
