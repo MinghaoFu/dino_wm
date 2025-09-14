@@ -22,9 +22,9 @@ PROPRIO_STD = torch.tensor([0.1633525937795639, 0.3669397532939911, 0.0147704510
 class RobomimicDataset(TrajDataset):
     def __init__(
         self,
+        data_path: str,  # Required parameter, no default
         n_rollout: Optional[int] = None,
         transform: Optional[Callable] = None,
-        data_path: str = "/mnt/data1/minghao/robomimic/can/ph_converted_final",
         normalize_action: bool = True,
         relative=True,
         action_scale=1.0,
@@ -64,14 +64,28 @@ class RobomimicDataset(TrajDataset):
         self.states = self.states[:n]
         self.actions = self.actions[:n]
         self.seq_lengths = self.seq_lengths[:n]
-        self.proprios = self.states.clone()  # For robomimic, states are proprio
-        # load velocities and update states and proprios
+        
+        # Try to load separate proprios file (new format), fallback to old method
+        try:
+            self.proprios = torch.load(self.data_path / "proprios.pth")
+            self.proprios = self.proprios[:n].float()
+            print(f"Loaded separate proprios.pth ({self.proprios.shape[-1]}D proprios)")
+        except FileNotFoundError:
+            print(f"No proprios.pth found, using legacy method")
+            self.proprios = self.states.clone()  # Legacy: states are proprio
+            
+        # load velocities and update states and proprios (legacy behavior)
         self.with_velocity = with_velocity
-        if with_velocity:
+        if with_velocity and not (self.data_path / "proprios.pth").exists():
+            # Only do this for legacy datasets without separate proprios.pth
             self.velocities = torch.load(self.data_path / "velocities.pth")
             self.velocities = self.velocities[:n].float()
             self.states = torch.cat([self.states, self.velocities], dim=-1)
             self.proprios = torch.cat([self.proprios, self.velocities], dim=-1)
+        elif with_velocity:
+            # For new format, just load velocities separately (they're already in proprios)
+            self.velocities = torch.load(self.data_path / "velocities.pth")
+            self.velocities = self.velocities[:n].float()
         print(f"Loaded {n} rollouts")
 
         self.action_dim = self.actions.shape[-1]
@@ -147,8 +161,8 @@ class RobomimicDataset(TrajDataset):
 
 def load_robomimic_slice_train_val(
     transform,
+    data_path,  # Required parameter, no default
     n_rollout=50,
-    data_path="/mnt/data1/minghao/robomimic/can/ph_converted_final",
     normalize_action=True,
     split_ratio=0.8,
     num_hist=0,
@@ -163,16 +177,16 @@ def load_robomimic_slice_train_val(
     if os.path.exists(train_path) and os.path.exists(val_path):
         # 如果有分割，使用分割的数据
         train_dset = RobomimicDataset(
+            data_path=train_path,
             n_rollout=n_rollout,
             transform=transform,
-            data_path=train_path,
             normalize_action=normalize_action,
             with_velocity=with_velocity,
         )
         val_dset = RobomimicDataset(
+            data_path=val_path,
             n_rollout=n_rollout,
             transform=transform,
-            data_path=val_path,
             normalize_action=normalize_action,
             with_velocity=with_velocity,
         )
@@ -180,9 +194,9 @@ def load_robomimic_slice_train_val(
         # 如果没有分割，创建一个数据集并手动分割
         print(f"No train/val split found, using single dataset at {data_path}")
         full_dset = RobomimicDataset(
+            data_path=data_path,
             n_rollout=n_rollout,
             transform=transform,
-            data_path=data_path,
             normalize_action=normalize_action,
             with_velocity=with_velocity,
         )

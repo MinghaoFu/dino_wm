@@ -86,7 +86,6 @@ class CEMProjectedPlanner(CEMPlanner):
                         obs_0=cur_trans_obs_0,
                         act=action,
                     )
-
                 loss = self.objective_fn(i_z_obses, cur_z_obs_g)
                 topk_idx = torch.argsort(loss)[: self.topk]
                 topk_action = action[topk_idx]

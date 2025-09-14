@@ -294,12 +294,13 @@ def planning_main(cfg_dict):
     )
     model = load_model(model_ckpt, model_cfg, num_action_repeat, device=device)
 
-    # Create robomimic environment
     try:
-        from env.robomimic.robomimic_env import RobomimicCanEnv  
+        from env.robomimic.robomimic_env import RobomimicEnv
+        env_name = cfg_dict.get("env_name", "can-ph")  # Default to can-ph if not specified
+        data_prefix = cfg_dict.get("data_prefix", "/home/ubuntu/minghao/data/robomimic")
         env = SubprocVectorEnv(
             [
-                lambda: RobomimicCanEnv(with_velocity=True, with_target=True)
+                lambda: RobomimicEnv(env_name=env_name, data_prefix=data_prefix)
                 for _ in range(cfg_dict["n_evals"])
             ]
         )

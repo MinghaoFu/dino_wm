@@ -417,12 +417,13 @@ python train_robomimic_compress.py --config-name=train_robomimic_compress traini
 - **⚙️ InfoNCE**: Configurable alignment dimension matching robomimic state dimensions
 - **🔧 DDP Fixes**: Resolved multi-GPU DistributedDataParallel issues
 
-**Current Architecture (80D Projected Latent)**:
-- **Input**: 384D DINO visual + 32D proprio + 16D action = 432D total
-- **Projection**: 416D (visual+proprio) → 64D compressed features  
-- **Final**: 80D (64D projected + 16D action) for temporal prediction
-- **Supervision**: Partial - only 64D projected features supervised
-- **InfoNCE**: Configurable alignment_dim (default 7D) for state alignment
+**Current Architecture (Projected Latent)**:
+- **Input**: DINO visual features + proprio embedding + action embedding
+- **Visual**: Original DINO features (no compression)
+- **Projection**: Visual+proprio mixed → compressed latent space
+- **Prediction**: Projected features + action embeddings for temporal modeling
+- **Supervision**: InfoNCE alignment + latent dynamics prediction
+- **Alignment**: Configurable alignment dimension for state consistency
 
 ## 🔧 **Key Configuration Files**
 
@@ -434,7 +435,7 @@ dataset:
   with_velocity: true
   n_rollout: null
   normalize_action: ${normalize_action}
-  data_path: /home/ubuntu/minghao/data/robomimic/can/ph_converted_final  # Updated path
+  data_path: /home/ubuntu/minghao/data/robomimic/can/ph_convert  # 7D dataset
   split_ratio: 0.9
 ```
 
@@ -510,14 +511,15 @@ python -c "import robosuite, robomimic; print('Robosuite/Robomimic OK')"
 
 ## 📊 **Current Status**
 - ✅ **Environment**: Python 3.10 wm310 with all packages
-- ✅ **Dataset**: 200 episodes converted with proper video format
-- ✅ **Training**: Multi-GPU training running (50 epochs, 2 GPUs)
-- ✅ **Architecture**: 80D projected latent with InfoNCE alignment
+- ✅ **Dataset**: 7D actions, 16D proprio, 23D states with proper video format  
+- ✅ **Training**: Multi-GPU training capability
+- ✅ **Architecture**: Projected latent with InfoNCE alignment + Original DINO-WM baseline
 - ✅ **Automation**: Complete one-command setup script
 
-**Latest Training**: 2-GPU training active at `/home/ubuntu/minghao/dino_wm/outputs/2025-09-10/07-48-39`
+**Ready for Training**: Both projected and original implementations configured for 7D robomimic dataset
 
 ---
 
 *Last updated: Sep 10, 2025 - All configuration issues resolved and training active*
 - for get about 64, it just a hyperparameter, we term it as projected dim
+- 每次修改时非必要不要创造新文件，只在原文件上改

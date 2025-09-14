@@ -7,7 +7,7 @@ set -e  # Exit on any error
 
 # Environment setup
 echo "🔧 Setting up environment..."
-cd /home/ubuntu/minghao/dino_wm
+cd /home/ubuntu/minghao/wm
 export PATH="/home/ubuntu/miniconda/bin:$PATH"
 eval "$(/home/ubuntu/miniconda/bin/conda shell.bash hook)"
 conda activate wm310
@@ -25,18 +25,18 @@ export HF_HUB_ENABLE_HF_TRANSFER=1
 # Training configuration
 CONFIG_NAME="train_robomimic_compress"
 DEBUG_MODE=${DEBUG:-false}
-EPOCHS=${EPOCHS:-50}  # Default to 50 epochs, can be overridden
-NUM_GPUS=${NUM_GPUS:-1}  # Default to 1 GPU, can be overridden
-GPU_IDS=${GPU_IDS:-"auto"}  # Can specify specific GPUs like "0,1" or "auto"
-RESUME_FROM=${RESUME_FROM:-""}  # Optional: specify checkpoint directory to resume from
+EPOCHS=${EPOCHS:-50}  
+NUM_GPUS=${NUM_GPUS:-1}  
+GPU_IDS=${GPU_IDS:-"auto"}  
+RESUME=${RESUME:-""}  
 
 echo "🚀 Starting DINO World Model training..."
 echo "Config: $CONFIG_NAME"
 echo "Debug mode: $DEBUG_MODE"
 echo "Epochs: $EPOCHS"
 echo "Number of GPUs: $NUM_GPUS"
-if [ -n "$RESUME_FROM" ]; then
-    echo "Resume from: $RESUME_FROM"
+if [ -n "$RESUME" ]; then
+    echo "Resume from: $RESUME"
 fi
 
 # GPU selection - use simple approach that works with PyTorch
@@ -87,9 +87,9 @@ echo "🎯 Starting full training..."
 
 # Set up training command with optional resume path
 TRAIN_ARGS="--config-name=$CONFIG_NAME training.epochs=$EPOCHS"
-if [ -n "$RESUME_FROM" ]; then
-    echo "📂 Will resume from checkpoint: $RESUME_FROM"
-    TRAIN_ARGS="$TRAIN_ARGS +saved_folder=$RESUME_FROM"
+if [ -n "$RESUME" ]; then
+    echo "📂 Will resume from checkpoint: $RESUME"
+    TRAIN_ARGS="$TRAIN_ARGS +saved_folder=$RESUME"
 fi
 
 # Function to copy models and specific config file after training starts (only for full training)
@@ -117,7 +117,7 @@ copy_models_and_config() {
 
 if [ "$NUM_GPUS" -eq 1 ]; then
     echo "Running single GPU training..."
-    python train_robomimic_compress.py $TRAIN_ARGS &
+    python train_robomimic_compress.py $TRAIN_ARGS 
     TRAIN_PID=$!
 else
     echo "Running multi-GPU training with $NUM_GPUS GPUs..."
@@ -127,7 +127,7 @@ else
         --mixed_precision=no \
         train_robomimic_compress.py \
         $TRAIN_ARGS \
-        training.batch_size=16 & # Reduce batch size per GPU for multi-GPU
+        training.batch_size=16  # Reduce batch size per GPU for multi-GPU
     TRAIN_PID=$!
 fi
 

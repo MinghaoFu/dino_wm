@@ -141,7 +141,18 @@ class Decoder(nn.Module):
 
         blocks.append(nn.ReLU(inplace=True))
 
-        if stride == 4:
+        if stride == 8:
+            # 8x upsampling: stride=2, stride=2, stride=2 (2x2x2 = 8)
+            blocks.extend(
+                [
+                    nn.ConvTranspose2d(channel, channel // 2, 4, stride=2, padding=1),
+                    nn.ReLU(inplace=True),
+                    nn.ConvTranspose2d(channel // 2, channel // 4, 4, stride=2, padding=1),
+                    nn.ReLU(inplace=True),
+                    nn.ConvTranspose2d(channel // 4, out_channel, 4, stride=2, padding=1),
+                ]
+            )
+        elif stride == 4:
             blocks.extend(
                 [
                     nn.ConvTranspose2d(channel, channel // 2, 4, stride=2, padding=1),
@@ -174,6 +185,8 @@ class VQVAE(nn.Module):
         n_embed=512,
         decay=0.99,
         quantize=True,
+        upsample_stride=4,  # 可配置的上采样rate
+        decode_stride=4,    # 可配置的decode rate
     ):
         super().__init__()
 
@@ -184,14 +197,14 @@ class VQVAE(nn.Module):
             for param in self.quantize_b.parameters():
                 param.requires_grad = False
 
-        self.upsample_b = Decoder(emb_dim, emb_dim, channel, n_res_block, n_res_channel, stride=4)
+        self.upsample_b = Decoder(emb_dim, emb_dim, channel, n_res_block, n_res_channel, stride=upsample_stride)
         self.dec = Decoder(
             emb_dim,
             in_channel,
             channel,
             n_res_block,
             n_res_channel,
-            stride=4,
+            stride=decode_stride,
         )
         self.info = f"in_channel: {in_channel}, channel: {channel}, n_res_block: {n_res_block}, n_res_channel: {n_res_channel}, emb_dim: {emb_dim}, n_embed: {n_embed}, decay: {decay}"
 

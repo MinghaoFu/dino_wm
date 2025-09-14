@@ -17,7 +17,6 @@ from einops import rearrange
 from omegaconf import OmegaConf, open_dict
 
 from env.venv import SubprocVectorEnv
-from custom_resolvers import replace_slash
 from preprocessor import Preprocessor
 from planning.evaluator import PlanEvaluator
 from utils import cfg_to_dict, seed
@@ -172,6 +171,7 @@ class PlanWorkspace:
             )
             print("traj_len: ", self.frameskip * self.goal_H + 1)
             if self.env is not None:
+                import pdb; pdb.set_trace()
                 self.env.update_env(env_info)
 
             # get states from val trajs
@@ -317,6 +317,8 @@ def load_model(model_ckpt, train_cfg, num_action_repeat, device):
 
     if "encoder" not in result:
         result["encoder"] = hydra.utils.instantiate(train_cfg.encoder)
+    if "post_concat_projection" not in result:
+        result["post_concat_projection"] = hydra.utils.instantiate(train_cfg.projector)
     if "predictor" not in result:
         raise ValueError("Predictor not found in model checkpoint")
 
@@ -349,6 +351,7 @@ def load_model(model_ckpt, train_cfg, num_action_repeat, device):
         action_encoder=result["action_encoder"],
         predictor=result["predictor"],
         decoder=result["decoder"],
+        post_concat_projection=result["post_concat_projection"],
         proprio_dim=train_cfg.proprio_emb_dim,
         action_dim=train_cfg.action_emb_dim,
         concat_dim=train_cfg.concat_dim,

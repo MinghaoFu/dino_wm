@@ -10,7 +10,7 @@ echo "======================================"
 
 # Environment setup
 echo "🔧 Setting up environment..."
-cd /home/ubuntu/minghao/dino_wm
+cd /home/ubuntu/minghao/wm
 export PATH="/home/ubuntu/miniconda/bin:$PATH"
 eval "$(/home/ubuntu/miniconda/bin/conda shell.bash hook)"
 conda activate wm310
@@ -24,8 +24,8 @@ export HUGGINGFACE_HUB_CACHE=$HOME/.cache/huggingface
 export HF_HUB_ENABLE_HF_TRANSFER=1
 
 # Configuration
-CKPT_PATH=${CKPT_PATH:-"/home/ubuntu/minghao/dino_wm/outputs/2025-09-11/09-16-55"}
-DATA_PATH=${DATA_PATH:-"/home/ubuntu/minghao/data/robomimic/can/ph_converted_final"}
+CKPT_PATH=${CKPT_PATH:-"/home/ubuntu/minghao/wm/outputs/2025-09-13/03-37-25"}
+DATA_PATH=${DATA_PATH:-"/home/ubuntu/minghao/data/robomimic/can/ph_convert"}
 GPU_ID=${GPU_ID:-2}  # Default to GPU 2
 
 echo "🎯 Planning Configuration:"

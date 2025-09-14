@@ -248,6 +248,14 @@ class Trainer:
         # Get emb_dim BEFORE wrapping with accelerate - avoid DDP attribute access issues
         action_emb_dim = self.action_encoder.emb_dim
         print(f"Action encoder type: {type(self.action_encoder)}")
+        
+        self.projection_input_dim = self.cfg.encoder_emb_dim + self.cfg.proprio_emb_dim * self.cfg.num_proprio_repeat
+        self.post_concat_projection = hydra.utils.instantiate(
+            self.cfg.projector,
+            in_features=self.projection_input_dim,
+            out_features=self.cfg.projected_dim,
+        )
+        self.post_concat_projection = self.accelerator.prepare(self.post_concat_projection)
 
         self.action_encoder = self.accelerator.prepare(self.action_encoder)
 
@@ -308,6 +316,7 @@ class Trainer:
             action_encoder=self.action_encoder,
             predictor=self.predictor,
             decoder=self.decoder,
+            post_concat_projection=self.post_concat_projection,
             proprio_dim=proprio_emb_dim,
             action_dim=action_emb_dim,
             concat_dim=self.cfg.concat_dim,
@@ -345,12 +354,7 @@ class Trainer:
             else:
                 self.model.alignment_feature_selection = 'isolate'  # Default: isolate first 64 dims
         
-        # Note: Model is NOT prepared with accelerator - only individual components are prepared
-        # This allows custom methods like encode(), rollout(), decode_obs() to work directly
-        # However, we still need to move the model to the correct device
         self.model = self.model.to(self.accelerator.device)
-        
-        # Load checkpoint after all models are initialized
         model_ckpt = Path(self.cfg.saved_folder) / "checkpoints" / "model_latest.pth"
         if model_ckpt.exists():
             self.load_ckpt(model_ckpt)
@@ -542,12 +546,9 @@ class Trainer:
                 if self.cfg.has_predictor:
                     # Use projected features like in forward pass
                     z_gt, _ = self.model.encode(obs, act)  # Returns (64D projected features, z_dct)
-                    z_tgt_tensor = z_gt[:, self.model.num_pred :, :, :]  # (b, num_hist, num_patches, 64)
+                    z_tgt = slice_trajdict_with_t({"projected": z_gt}, start_idx=self.model.num_pred)  # (b, num_hist, num_patches, 64)
                     
-                    # Create dummy dictionary format for evaluation compatibility
-                    # Since we can't separate 64D projected features, treat as unified "visual"
-                    z_obs_out = {"visual": z_out}  # z_out is 64D projected features
-                    z_tgt = {"visual": z_tgt_tensor}  # z_tgt is 64D projected features
+                    z_obs_out = {"projected": z_out}  # z_out is 64D projected features
 
                     state_tgt = state[:, -self.model.num_hist :]  # (b, num_hist, dim)
                     err_logs = self.err_eval(z_obs_out, z_tgt)
@@ -640,10 +641,22 @@ class Trainer:
             )
 
             loss = self.accelerator.gather_for_metrics(loss).mean()
+            
+            # Save three-way reconstruction visualizations during validation
+            if plot and all(key in loss_components for key in ["visual_pred", "visual_tgt", "visual_reconstructed"]):
+                self.save_reconstruction_comparison_threeway(
+                    visual_tgt=loss_components["visual_tgt"],                    # Ground truth target images
+                    visual_pred=loss_components["visual_pred"],                  # Reconstruction from predictions
+                    visual_reconstructed=loss_components["visual_reconstructed"], # Reconstruction from original encoded features
+                    epoch=self.epoch,
+                    batch_idx=i
+                )
 
             loss_components = self.accelerator.gather_for_metrics(loss_components)
             loss_components = {
-                key: value.mean().item() for key, value in loss_components.items()
+                key: value.mean().item() if isinstance(value, torch.Tensor) else value
+                for key, value in loss_components.items()
+                if key not in ["visual_pred", "visual_tgt", "visual_reconstructed", "visual_original"]  # Exclude visualization data from metrics
             }
 
             if self.cfg.has_decoder and plot:
@@ -769,10 +782,8 @@ class Trainer:
             obs_g = {}
             for k in obs.keys():
                 obs_g[k] = obs[k][-1].unsqueeze(0).unsqueeze(0).to(self.device)
-            act_g = act[-1].unsqueeze(0).unsqueeze(0).to(self.device)  # Last action, same shape as obs_g
-            # Use projected features like in forward pass
-            z_g_tensor, _ = self.model.encode(obs_g, act_g)  # Returns (64D projected features, z_dct)
-            z_g = {"visual": z_g_tensor}  # Create dummy dictionary format for evaluation compatibility
+                
+            z_g = self.model.encode_to_projected(obs_g)
             actions = act.unsqueeze(0)
 
             for past in num_past:
@@ -786,8 +797,9 @@ class Trainer:
 
                 z_obses, z = self.model.rollout(obs_0, actions)
                 # z contains full 64D projected features, extract last timestep
-                z_last = slice_trajdict_with_t({"visual": z}, start_idx=-1, end_idx=None)
+                z_last = slice_trajdict_with_t(z_obses, start_idx=-1, end_idx=None)
                 div_loss = self.err_eval_single(z_last, z_g)
+            
 
                 for k in div_loss.keys():
                     log_key = f"z_{k}_err_rollout{postfix}"
@@ -801,7 +813,6 @@ class Trainer:
                         ]
 
                 if self.cfg.has_decoder:
-                    # z_obses now contains full 64D features in a dict format
                     visuals = self.model.decode_obs(z_obses)[0]["visual"]
                     imgs = torch.cat([obs["visual"], visuals[0].cpu()], dim=0)
                     self.plot_imgs(
@@ -842,6 +853,90 @@ class Trainer:
         if self.accelerator.is_main_process:
             self.wandb_run.log(epoch_log)
         self.epoch_log = OrderedDict()
+
+    def save_reconstruction_comparison_threeway(self, visual_tgt, visual_pred, visual_reconstructed, epoch, batch_idx):
+        """
+        Save three-way comparison: ground truth, reconstruction from prediction, reconstruction from original encoded features
+        
+        Args:
+            visual_tgt: (B, T, 3, H, W) - Ground truth target images
+            visual_pred: (B, T, 3, H, W) - Decoder reconstructed images from predictions
+            visual_reconstructed: (B, T, 3, H, W) - Decoder reconstructed images from original encoded features
+            epoch: Current training epoch
+            batch_idx: Current batch index
+        """
+        if not self.accelerator.is_main_process:
+            return
+            
+        import os
+        from torchvision.utils import save_image
+        from einops import rearrange
+        
+        # Take first 4 samples and first 2 time steps for visualization
+        num_samples = min(4, visual_tgt.shape[0])
+        num_frames = min(2, visual_tgt.shape[1])
+        
+        visual_tgt = visual_tgt[:num_samples, :num_frames]              # (4, 2, 3, H, W)
+        visual_pred = visual_pred[:num_samples, :num_frames]            # (4, 2, 3, H, W)
+        visual_reconstructed = visual_reconstructed[:num_samples, :num_frames]  # (4, 2, 3, H, W)
+        
+        # Create comparison grid: [ground_truth, recon_from_pred, recon_from_encoded, ...]
+        comparison = []
+        for i in range(num_samples):
+            for t in range(num_frames):
+                comparison.append(visual_tgt[i, t])           # Ground truth
+                comparison.append(visual_pred[i, t])          # Reconstruction from prediction
+                comparison.append(visual_reconstructed[i, t]) # Reconstruction from original encoded features
+        
+        # Stack into single tensor: (num_samples*num_frames*3, 3, H, W)
+        comparison_tensor = torch.stack(comparison, dim=0)
+        
+        if comparison_tensor.min() < 0:
+            comparison_tensor = (comparison_tensor + 1) / 2  # [-1, 1] -> [0, 1]
+        # If data is in [0, 255] range, convert to [0, 1]
+        elif comparison_tensor.max() > 1:
+            comparison_tensor = comparison_tensor / 255.0  # [0, 255] -> [0, 1]
+        
+        comparison_tensor = torch.clamp(comparison_tensor, 0, 1)
+        
+        # Create output directory
+        save_dir = os.path.join(self.cfg.saved_folder, "reconstructions")
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Save comparison grid
+        filename = f"epoch_{epoch:03d}_batch_{batch_idx:03d}_threeway_comparison.png"
+        filepath = os.path.join(save_dir, filename)
+        
+        save_image(
+            comparison_tensor,
+            filepath,
+            nrow=3,  # 3 images per row (ground_truth, recon_from_pred, recon_from_encoded)
+            normalize=False,  # Already normalized
+            padding=2,
+            pad_value=1.0  # White padding
+        )
+        
+        print(f"✅ Saved three-way reconstruction comparison: {filepath}")
+        
+        # Optionally log to wandb
+        if hasattr(self, 'wandb_run') and self.wandb_run is not None:
+            import wandb
+            # Create wandb images with labels
+            wandb_images = []
+            for i in range(min(2, num_samples)):  # Show first 2 samples
+                for t in range(num_frames):
+                    tgt_img = visual_tgt[i, t].cpu()
+                    pred_img = visual_pred[i, t].cpu()
+                    recon_img = visual_reconstructed[i, t].cpu()
+                    
+                    wandb_images.append(wandb.Image(tgt_img, caption=f"GT_S{i}_T{t}"))
+                    wandb_images.append(wandb.Image(pred_img, caption=f"ReconPred_S{i}_T{t}"))
+                    wandb_images.append(wandb.Image(recon_img, caption=f"ReconOrig_S{i}_T{t}"))
+            
+            self.wandb_run.log({
+                f"reconstructions_threeway/epoch_{epoch}": wandb_images
+            })
+
 
     def plot_samples(
         self,

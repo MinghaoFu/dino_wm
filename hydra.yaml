@@ -89,7 +89,7 @@ predictor:
   dropout: 0.1
   emb_dropout: 0
   pool: mean
-saved_folder: /home/minghao/workspace/dino_wm
+saved_folder: /home/minghao/workspace/wm
 effective_batch_size: 4
 gpu_batch_size: 4
 wandb_run_id: e5wdmftg
